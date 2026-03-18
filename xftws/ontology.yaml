@@ -1,0 +1,636 @@
+# XFTWS Domain Ontology (Event-Centric Model)
+# Machine-readable entity definitions, relationships, and field semantics
+# Consumed by TaxonomyValidator (Tier 2) and AI agents (DX/UX/MX intel)
+taxonomy: ontology
+domain: xftws
+version: "2.1"
+description: "Fixed income, currencies & commodities — event-driven trade lifecycle, correlation engine, risk analytics, and settlement"
+
+dna: |
+  xftws models the full lifecycle of institutional OTC derivatives and fixed income
+  trading as a unified stream of business events. Every action — RFQ, quote, booking,
+  clearing message, allocation, amendment, settlement — is an Event record with a
+  polymorphic payload determined by event_type.
+
+  Events link to each other via typed relationships (CORRELATES_WITH, CHILD_OF,
+  AMENDS, SETTLES) forming directed graphs. A "trade" is not a table — it's a
+  materialized event created when correlated booking events converge. This unification
+  reduces 14 datasets to 4 (3 reference + 1 event table).
+
+  The matching engine operates on 5 data-agnostic foundation primitives (Correlation,
+  Reconciliation, Allocation, Aggregation, Override) that business scenarios configure
+  without writing new engines. 30 business scenarios map to these 5 primitives.
+
+  Target users: traders executing deals, sales desks entering client tickets,
+  operations teams matching and confirming, risk managers monitoring Greeks and P&L,
+  middle office processing amendments and lifecycle events, settlement teams
+  reconciling payments, compliance teams auditing regulatory reporting.
+
+  Data philosophy: append-only event stream with built-in revision control.
+  Every event carries transitions[] — an append-only log of every state change
+  with field-level diffs. No separate amendment table — the diff IS the history.
+  Reference data (entities, books, FpML templates) remains static config.
+
+# =============================================================================
+# ENTITIES — 4 operational schemas (3 reference + 1 event)
+# =============================================================================
+
+entities:
+
+  # ── Event (the ONE schema) ──
+  event:
+    description: "Universal business event — all actions flow through here"
+    dset: events
+    required_fields:
+      - { name: event_id, type: str }
+      - { name: event_type, type: str }
+      - { name: source, type: str }
+      - { name: status, type: str }
+    ui:
+      hero_fields: [event_id, event_type, status]
+      primary_fields: [source, protocol, cpty_id, book_id, product_type]
+      card: { title: event_id, subtitle: event_type, badge: status }
+    polymorphic:
+      discriminator: event_type
+      payloads:
+        RFQ:              { schema: _event_payloads/rfq.yaml }
+        QUOTE:            { schema: _event_payloads/quote.yaml }
+        ORDER:            { schema: _event_payloads/order.yaml }
+        SALES_BOOKING:    { schema: _event_payloads/sales_booking.yaml }
+        TRADING_BOOKING:  { schema: _event_payloads/trading_booking.yaml }
+        OBO_TICKET:       { schema: _event_payloads/obo_ticket.yaml }
+        STP_MESSAGE:      { schema: _event_payloads/stp_message.yaml }
+        BROKER_FILL:      { schema: _event_payloads/broker_fill.yaml }
+        CLEARING_MSG:     { schema: _event_payloads/clearing_msg.yaml }
+        AFFIRM_MSG:       { schema: _event_payloads/affirm_msg.yaml }
+        GIVEUP_NOTICE:    { schema: _event_payloads/giveup_notice.yaml }
+        ALLOC_SPLIT:      { schema: _event_payloads/alloc_split.yaml }
+        SETTLEMENT_INSTR: { schema: _event_payloads/settlement_instr.yaml }
+        MARGIN_CALL:      { schema: _event_payloads/margin_call.yaml }
+        NET_SETTLEMENT:   { schema: _event_payloads/net_settlement.yaml }
+        AMENDMENT:        { schema: _event_payloads/amendment.yaml }
+        POSITION_SNAPSHOT: { schema: _event_payloads/position_snapshot.yaml }
+        TRADE:            { schema: _event_payloads/trade.yaml }
+        RISK_MEASURE:     { schema: _event_payloads/risk_measure.yaml }
+        SCHEDULE_EVENT:   { schema: _event_payloads/schedule_event.yaml }
+    relationships:
+      - { target: events, type: graph, via: "links[].event_id", description: "Typed links forming event chains (RFQ → Quote → Booking → Trade → Settlement)" }
+      - { target: entities, type: references, via: cpty_id, description: "Counterparty entity" }
+      - { target: entities, type: references, via: source_entity_id, description: "Source entity (who created this event)" }
+      - { target: books, type: references, via: book_id, description: "Trading book (for booking/trade events)" }
+      - { target: fpmls, type: references, via: product_type, description: "FpML product template (for trade-related events)" }
+    workflow:
+      field: status
+      states: [PENDING, QUOTED, ACCEPTED, REJECTED, EXPIRED, OPEN, PARTIAL_FILL, FILLED, UNMATCHED, PARTIAL, MATCHED, FORCED, DISPUTED, RESOLVED, CONFIRMED, CLEARED, SETTLED, CANCELLED]
+      transitions:
+        _any: [PENDING, CANCELLED]
+        PENDING: [QUOTED, OPEN, UNMATCHED]
+        QUOTED: [ACCEPTED, REJECTED, EXPIRED]
+        OPEN: [PARTIAL_FILL, FILLED]
+        PARTIAL_FILL: [FILLED]
+        UNMATCHED: [PARTIAL, MATCHED, FORCED]
+        PARTIAL: [MATCHED]
+        MATCHED: [CONFIRMED, DISPUTED]
+        DISPUTED: [RESOLVED]
+        CONFIRMED: [CLEARED, SETTLED]
+        CLEARED: [SETTLED]
+    sub_structures:
+      # ── Three-layer payload model ──
+      raw:
+        description: "Layer 1 — source-native message, immutable after capture"
+        fields: [format, version, content, raw_text, received_at, checksum, source_msg_id]
+        immutable: true
+        source_formats:
+          fix: _source_formats/fix/
+          fpml: _source_formats/fpml/
+          swift: _source_formats/swift/
+          markitwire: _source_formats/markitwire/
+          dtcc: _source_formats/dtcc/
+          bloomberg: _source_formats/bloomberg/
+          tradeweb: _source_formats/tradeweb/
+          lch: _source_formats/lch/
+          cme: _source_formats/cme/
+          ice: _source_formats/ice/
+          internal: _source_formats/internal/
+      payload:
+        description: "Layer 2 — canonical transform, what the matching engine reads"
+        polymorphic: true
+        discriminator: event_type
+        note: "Transformer per (source, protocol, event_type, product_type) produces this"
+      enriched:
+        description: "Layer 3 — post-match additions (risk, regulatory, settlement, compliance)"
+        fields: [risk_flags, regulatory, settlement, pricing, compliance, enriched_at, enriched_by]
+        populated_by: [risk-engine, regulatory-gateway, settlement-svc, compliance-svc]
+
+      # ── Other sub-structures ──
+      correlation:
+        description: "Matching engine metadata — populated when events get correlated"
+        fields: [match_type, scenario, match_status, cardinality, direction, breaks, resolution]
+      transitions:
+        description: "Append-only revision log — each entry has from_status, to_status, at, by, reason, diff"
+        type: append_only
+      links:
+        description: "Typed references to related events"
+        fields: [event_id, rel, role]
+
+  # ── Reference Data ──
+
+  entity:
+    description: "Legal entity, trading desk, branch, CCP, or broker"
+    dset: entities
+    required_fields:
+      - { name: entity_id, type: str }
+      - { name: entity_type, type: str }
+      - { name: name, type: str }
+    ui:
+      hero_fields: [name, entity_type, status]
+      primary_fields: [entity_id, parent_entity_id, lei, jurisdiction]
+      card: { title: name, subtitle: entity_type, badge: status }
+    relationships:
+      - { target: entities, type: self_ref, via: parent_entity_id, description: "Parent legal entity hierarchy" }
+      - { target: events, type: has_many, via: cpty_id, description: "Events involving this entity as counterparty" }
+      - { target: events, type: has_many, via: source_entity_id, description: "Events originated by this entity" }
+
+  book:
+    description: "Trading book / portfolio within an entity"
+    dset: books
+    required_fields:
+      - { name: book_id, type: str }
+      - { name: entity_id, type: str }
+      - { name: name, type: str }
+    ui:
+      hero_fields: [name, desk, status]
+      primary_fields: [book_id, entity_id, book_type, ccy]
+      card: { title: name, subtitle: desk, badge: status }
+    relationships:
+      - { target: entities, type: references, via: entity_id, description: "Owning legal entity" }
+      - { target: events, type: has_many, via: book_id, description: "Events booked to this portfolio" }
+
+  fpml:
+    description: "ISDA FpML product template defining trade structure"
+    dset: fpmls
+    required_fields:
+      - { name: fpml_id, type: str }
+      - { name: product_type, type: str }
+    ui:
+      hero_fields: [fpml_id, product_type]
+      primary_fields: [asset_class, leg_count, template_version]
+      card: { title: fpml_id, subtitle: product_type }
+    relationships:
+      - { target: events, type: has_many, via: product_type, description: "Events using this product template" }
+
+# =============================================================================
+# HIERARCHIES — Classification trees (consumed by agents, not validator)
+# =============================================================================
+
+hierarchies:
+
+  entity_hierarchy:
+    description: "Legal entity → trading desk → book"
+    levels:
+      - { field: entity_type, entity: entity, count: 5, description: "Entity classification (LEGAL_ENTITY, TRADING_DESK, BRANCH, CCP, BROKER)" }
+      - { field: entity_id, entity: entity, description: "Specific entity within type" }
+      - { field: book_id, entity: book, description: "Trading book within entity" }
+
+  product_taxonomy:
+    description: "Product type → FpML template → leg structure"
+    levels:
+      - { field: product_type, entity: fpml, description: "ISDA product classification" }
+      - { field: fpml_id, entity: fpml, description: "Specific FpML template" }
+
+  event_type_taxonomy:
+    description: "Event group → event types"
+    levels:
+      - { field: group, entity: event, count: 8, description: "Functional grouping of event types" }
+      - { field: event_type, entity: event, count: 29, description: "Specific business action type" }
+    values:
+      PRE_TRADE: [RFQ, QUOTE, ORDER, CLIENT_RFQ]
+      BOOKING: [SALES_BOOKING, TRADING_BOOKING, OBO_TICKET, TRADING_ACCEPT]
+      EXTERNAL: [STP_MESSAGE, BROKER_FILL, CLEARING_MSG, AFFIRM_MSG, GIVEUP_NOTICE, GIVEUP_ACCEPT]
+      MATCHING: [MATCH, UNMATCH]
+      ALLOCATION: [ALLOC_SPLIT]
+      SETTLEMENT: [SETTLEMENT_INSTR, MARGIN_CALL, NET_SETTLEMENT]
+      LIFECYCLE: [AMENDMENT, POSITION_SNAPSHOT, CANCEL_REQUEST, CANCEL_CONFIRM, NOVATION_REQUEST, NOVATION_ACCEPT, EXERCISE_NOTICE, INTERNAL_TRANSFER]
+      MATERIALIZED: [TRADE, RISK_MEASURE, SCHEDULE_EVENT]
+
+  matching_foundation:
+    description: "Foundation primitive → business scenarios"
+    levels:
+      - { field: match_type, entity: event, count: 6, description: "Data-agnostic matching primitive" }
+      - { field: scenario, entity: event, count: 30, description: "Business scenario configured on a primitive" }
+    values:
+      CORRELATION:
+        - RFQ_HIT
+        - RFQ_MISS
+        - BACK_TO_BACK
+        - RFQ
+        - BROKER_EXEC
+        - CLEARING
+        - OBO_CLIENT
+        - CPTY_AFFIRM
+        - GIVEUP
+        - TRADE_CONFIRM
+        - STP_AUTOBOOK
+        - SALES_DIRECT
+        - TRADER_FIRST
+      RECONCILIATION:
+        - AMENDMENT_RECON
+        - EOD_POSITION
+        - SETTLEMENT
+        - MARGIN_RECON
+        - REGULATORY_RECON
+      ALLOCATION:
+        - BLOCK_ALLOC
+        - ORDER_FILL
+        - ALLOCATION
+      AGGREGATION:
+        - NETTING
+        - COMPRESSION
+      OVERRIDE:
+        - FORCE_MATCH
+        - DISPUTE
+        - REMATCH
+      LIFECYCLE_SCENARIOS:
+        - CANCEL
+        - NOVATION
+        - ROLL
+        - EXERCISE
+
+  event_lifecycle:
+    description: "Universal event status progression (not linear — event_type determines valid paths)"
+    levels:
+      - { field: group, entity: event, count: 5, description: "Status group (universal, pre_trade, execution, matching, trade)" }
+      - { field: status, entity: event, count: 18, description: "Individual lifecycle state" }
+    groups:
+      universal: [ACTIVE, PENDING, CANCELLED]
+      pre_trade: [QUOTED, ACCEPTED, REJECTED, EXPIRED]
+      execution: [OPEN, PARTIAL_FILL, FILLED]
+      matching: [UNMATCHED, PARTIAL, MATCHED, FORCED, DISPUTED, RESOLVED]
+      trade: [CONFIRMED, CLEARED, SETTLED]
+
+  link_taxonomy:
+    description: "Link relationship types grouped by domain"
+    levels:
+      - { field: domain, entity: event, count: 5, description: "Link type domain (correlation, hierarchy, lifecycle, settlement, analytics)" }
+      - { field: rel, entity: event, count: 14, description: "Specific link relationship type" }
+    values:
+      correlation: [CORRELATES_WITH, RESPONDS_TO, ORIGINATES_FROM]
+      hierarchy: [PARENT_OF, CHILD_OF, CREATED_FROM]
+      lifecycle: [AMENDS, SUPERSEDES, CANCELS]
+      settlement: [SETTLES, NETS_WITH]
+      analytics: [MEASURES, SCHEDULES]
+
+# =============================================================================
+# VOCAB — Field semantics for cryptic/ambiguous names
+# =============================================================================
+
+vocab:
+  # ── Event model fields ──
+  event_id:
+    type: str
+    icon: key
+    description: "Unique event identifier (e.g., EVT-FX-001)"
+    aliases: [trade_id, match_id, alloc_id]
+    note: "All former per-type IDs are now event_ids with different event_types"
+  event_type:
+    type: str
+    icon: tag
+    description: "Type of business action — determines payload dict structure"
+    aliases: [record_type, action_type]
+  raw:
+    type: object
+    icon: file-code
+    description: "Layer 1 — source-native message as received, immutable after capture"
+    aliases: [original_message, wire_message]
+    note: "Stores parsed content + original wire text for audit/replay/debugging"
+  payload:
+    type: object
+    icon: package
+    description: "Layer 2 — canonical transform, polymorphic dict driven by event_type"
+    aliases: [data, body, economics]
+    note: "Matching engine reads ONLY this — never touches raw{}"
+  enriched:
+    type: object
+    icon: sparkles
+    description: "Layer 3 — post-match additions (risk flags, regulatory, settlement, compliance)"
+    aliases: [post_trade, annotations]
+    note: "Never present at capture time — added by downstream services after matching"
+  protocol:
+    type: str
+    icon: radio
+    description: "Wire protocol used to deliver the event (FIX, FpML, SWIFT, REST, INTERNAL)"
+    aliases: [wire_protocol, message_format]
+  source:
+    type: str
+    icon: arrow-down-circle
+    description: "Where this event originated (SALES_DESK, CCP, MARKITWIRE, etc.)"
+    aliases: [origin, channel]
+  transformer:
+    type: str
+    icon: shuffle
+    description: "Function that maps raw.content → payload using (source, protocol, event_type, product_type) tuple"
+    aliases: [mapper, normalizer, parser]
+  links:
+    type: array
+    icon: link
+    description: "Typed references to related events forming directed graphs"
+    aliases: [references, relations]
+  transitions:
+    type: array
+    icon: git-branch
+    description: "Append-only log of every status change with field-level diffs — IS the revision history"
+    aliases: [history, audit_trail, changelog]
+  correlation:
+    type: object
+    icon: git-merge
+    description: "Matching engine metadata — populated when events get correlated"
+    aliases: [matching, pairing]
+
+  # ── Trading vocabulary ──
+  trade_id:
+    type: str
+    icon: hash
+    description: "Unique trade identifier in TRADE event payload (e.g., TRD-FX-001)"
+    aliases: [deal_id, ticket_id]
+    note: "Lives inside payload of event_type=TRADE — NOT a top-level field anymore"
+  fpml_type:
+    type: str
+    icon: file-text
+    description: "FpML product type — references ISDA product template"
+    aliases: [product_type, instrument_type]
+  ned:
+    type: object
+    icon: clipboard
+    description: "Non-Economic Details — book, portfolio, strategy, clearing info"
+    aliases: [trade_attributes, booking_details]
+  uti:
+    type: str
+    icon: fingerprint
+    description: "Unique Transaction Identifier — CFTC/EMIR regulatory ID"
+    aliases: []
+  usi:
+    type: str
+    icon: fingerprint
+    description: "Unique Swap Identifier — CFTC-specific regulatory ID"
+    aliases: []
+  lei:
+    type: str
+    icon: building
+    description: "Legal Entity Identifier — ISO 17442 global entity code"
+    aliases: []
+  ssi:
+    type: object
+    icon: route
+    description: "Standard Settlement Instructions — payment routing info"
+    aliases: []
+  ccp:
+    type: str
+    icon: shield
+    description: "Central Counterparty Clearing House (e.g., LCH, CME)"
+    aliases: []
+
+  # ── Risk vocabulary ──
+  dv01:
+    canonical_ref: financial.dv01
+    type: float
+    icon: activity
+    description: "Dollar Value of 01 — price change for 1bp rate move"
+    aliases: []
+  mtm:
+    canonical_ref: financial.mtm
+    type: float
+    icon: dollar-sign
+    description: "Mark-to-Market — current market value of position"
+    aliases: [mark_to_market, market_value]
+  tenor_bucket:
+    canonical_ref: financial.tenor_bucket
+    type: str
+    icon: clock
+    description: "Risk sensitivity time bucket (1M, 3M, 6M, 1Y, 2Y, 5Y, 10Y, 30Y)"
+    aliases: []
+  notional:
+    canonical_ref: financial.notional
+    type: float
+    icon: dollar-sign
+    description: "Face value / principal amount of the trade"
+    aliases: [face_value, principal]
+
+  # ── Matching vocabulary ──
+  lhs:
+    type: str
+    icon: arrow-right
+    description: "Left-hand side of correlation — the initiating event (can be ANY event_type)"
+    aliases: []
+    note: "Not restricted to 'internal' — LHS is simply whichever side arrived first or initiated"
+  rhs:
+    type: str
+    icon: arrow-left
+    description: "Right-hand side of correlation — the responding event(s) (can be ANY event_type)"
+    aliases: []
+    note: "Not restricted to 'external' — RHS is the counterpart(s) being correlated"
+  breaks:
+    type: array
+    icon: alert-triangle
+    description: "Field-level differences between correlated events that exceed tolerance"
+    aliases: [discrepancies, mismatches]
+  materialized:
+    type: str
+    icon: check-circle
+    description: "A TRADE event created by the correlation engine from converged booking events"
+    aliases: [resolved_trade, confirmed_trade]
+  novation:
+    type: str
+    icon: repeat
+    description: "Replacing a counterparty (typically with a CCP) on a matched trade"
+    aliases: []
+  stp:
+    type: str
+    icon: zap
+    description: "Straight-Through Processing — automated trade booking from inbound messages"
+    aliases: []
+  obo:
+    type: str
+    icon: user-plus
+    description: "On-Behalf-Of — sales entering a trade ticket as agent for a client"
+    aliases: []
+  giveup:
+    type: str
+    icon: arrow-right-circle
+    description: "Transferring a trade from executing broker to prime broker"
+    aliases: []
+  vwap:
+    type: float
+    icon: bar-chart
+    description: "Volume-Weighted Average Price — computed from multiple fills"
+    aliases: []
+  back_to_back:
+    type: str
+    icon: copy
+    description: "Mirror trade linking client-facing trade to risk/hedge trade"
+    aliases: []
+
+# =============================================================================
+# VALIDATORS — Regex patterns for field value validation
+# =============================================================================
+
+validators:
+  $ref: ../../shared/ontology/_validators.yaml
+  # domain-specific
+  lei:
+    pattern: "^[A-Z0-9]{20}$"
+    description: "ISO 17442 LEI — 20 alphanumeric characters"
+  uti:
+    pattern: "^[A-Z0-9]{32,52}$"
+    description: "CFTC UTI format"
+  event_id:
+    pattern: "^EVT-[A-Z]+-\\d{3,}$"
+    description: "Event ID format: EVT-{TYPE}-{SEQ}"
+
+# =============================================================================
+# SCHEMA TRANSITION MAP
+# =============================================================================
+# How current 12 schemas map to the event-centric model.
+# This section documents the migration path — not consumed by validators.
+
+schema_transition:
+  description: "Migration from entity-per-dataset (v1) to event-centric (v2)"
+
+  kept_unchanged:
+    - entity.yaml    # Reference data — static config, not events
+    - book.yaml      # Reference data — static config, not events
+    - fpml.yaml      # Reference data — static config, not events
+    - _enums.yaml    # Enriched with new event/matching enums
+    - _system.yaml   # System fields still auto-injected
+
+  absorbed_into_event:
+    trade.yaml:
+      becomes: "event_type: TRADE payload"
+      payload_schema: _event_payloads/trade.yaml
+      field_mapping:
+        trade_id:    "payload.trade_id"
+        fpml_type:   "payload.fpml_type (also top-level product_type on event)"
+        trade_date:  "payload.trade_date"
+        status:      "event.status (top-level)"
+        version:     "implicit — transitions[] length"
+        parties:     "payload.parties"
+        ned:         "payload.ned"
+        uti:         "payload.uti"
+        usi:         "payload.usi"
+      note: "Legs now live inside payload.legs[] — not a separate table"
+
+    leg.yaml:
+      becomes: "payload.legs[] inside TRADE/SALES_BOOKING/TRADING_BOOKING events"
+      payload_schema: null  # Nested inside booking/trade payload
+      field_mapping:
+        leg_id:      "payload.legs[n].leg_id"
+        trade_id:    "event.event_id (parent event)"
+        leg_type:    "payload.legs[n].leg_type"
+        leg_num:     "payload.legs[n].leg_num"
+        direction:   "payload.legs[n].direction"
+        notional:    "payload.legs[n].notional"
+        currency:    "payload.legs[n].currency"
+        rate:        "payload.legs[n].rate"
+        start_date:  "payload.legs[n].start_date"
+        end_date:    "payload.legs[n].end_date"
+      note: "No longer a separate dataset — embedded in booking/trade event payloads"
+
+    schedule.yaml:
+      becomes: "event_type: SCHEDULE_EVENT"
+      payload_schema: _event_payloads/schedule_event.yaml
+      field_mapping:
+        schedule_id: "event.event_id"
+        leg_id:      "payload.leg_id"
+        trade_id:    "links[{ rel: SCHEDULES }].event_id"
+        event_type:  "payload.event_subtype (PAYMENT/RESET/FIXING/COUPON/MATURITY)"
+        date:        "payload.date"
+        amount:      "payload.amount"
+        status:      "event.status"
+      note: "Links to parent trade event via links[].rel = SCHEDULES"
+
+    match.yaml:
+      becomes: "correlation{} sub-dict on any event"
+      payload_schema: null  # Not a separate event — metadata on existing events
+      field_mapping:
+        match_id:      "event.event_id (of the correlated event)"
+        match_status:  "event.correlation.match_status"
+        match_rule:    "event.correlation.scenario"
+        lhs:           "the event itself (or the initiating event in the chain)"
+        rhs:           "links[{ rel: CORRELATES_WITH }]"
+        breaks:        "event.correlation.breaks"
+        matched_at:    "event.correlation.matched_at"
+        matched_by:    "event.correlation.matched_by"
+      note: |
+        No separate match table. Correlation metadata lives directly on the
+        correlated events. Both LHS and RHS events get correlation{} populated.
+        The link between them is via links[{ rel: CORRELATES_WITH }].
+
+    allocation.yaml:
+      becomes: "event_type: ALLOC_SPLIT (one event per split)"
+      payload_schema: _event_payloads/alloc_split.yaml
+      field_mapping:
+        allocation_id:  "event.event_id"
+        block_trade_id: "links[{ rel: CHILD_OF }].event_id"
+        allocations:    "each split is its own ALLOC_SPLIT event"
+        validation:     "parent event.correlation tracks 1:N completeness"
+      note: |
+        Block trade is a TRADE event. Each allocation is an ALLOC_SPLIT event
+        linked via CHILD_OF. The parent TRADE tracks allocation status in
+        its correlation{} (match_type: ALLOCATION, cardinality: ONE_MANY).
+
+    amendment.yaml:
+      becomes: "event_type: AMENDMENT + transitions[] on target event"
+      payload_schema: _event_payloads/amendment.yaml
+      field_mapping:
+        amendment_id: "event.event_id"
+        trade_id:     "links[{ rel: AMENDS }].event_id"
+        amendment_type: "payload.amendment_type"
+        version:      "implicit — count of AMENDMENT events linked to target"
+        changes:      "payload.changes"
+        approvals:    "payload.approvals"
+        status:       "event.status"
+      note: |
+        Amendment event links to target via AMENDS. The target event also gets
+        a new entry in transitions[] with the diff of what changed. Dual record:
+        the AMENDMENT event for the approval workflow, the transition for the audit.
+
+    measure.yaml:
+      becomes: "event_type: RISK_MEASURE"
+      payload_schema: _event_payloads/risk_measure.yaml
+      field_mapping:
+        measure_id:   "event.event_id"
+        trade_id:     "links[{ rel: MEASURES }].event_id"
+        leg_id:       "payload.leg_event_id"
+        metric:       "payload.metric"
+        value:        "payload.value"
+        denomination: "payload.denomination"
+        tenor_bucket: "payload.tenor_bucket"
+        as_of_date:   "payload.as_of_date"
+      note: "Links to parent trade event via links[].rel = MEASURES"
+
+  new_event_types:
+    - RFQ              # Client asks for a price
+    - QUOTE            # Desk responds with price
+    - ORDER            # Order with fills tracking
+    - SALES_BOOKING    # Sales desk enters economics
+    - TRADING_BOOKING  # Trader enters risk booking
+    - OBO_TICKET       # On-behalf-of client ticket
+    - STP_MESSAGE      # Inbound STP/FIX/FpML message
+    - BROKER_FILL      # External broker execution fill
+    - CLEARING_MSG     # CCP clearing/novation message
+    - AFFIRM_MSG       # Counterparty affirmation
+    - GIVEUP_NOTICE    # Give-up/take-up notice
+    - SETTLEMENT_INSTR # Payment instruction
+    - MARGIN_CALL      # VM/IA margin call
+    - NET_SETTLEMENT   # Netted settlement across trades
+    - POSITION_SNAPSHOT # EOD position snapshot for recon
+    - CLIENT_RFQ       # Client-initiated RFQ (pre-trade)
+    - TRADING_ACCEPT   # Trader accepts booking
+    - GIVEUP_ACCEPT    # Give-up acceptance from prime broker
+    - MATCH            # Matching engine match event
+    - UNMATCH          # Matching engine unmatch/break event
+    - CANCEL_REQUEST   # Request to cancel a trade
+    - CANCEL_CONFIRM   # Confirmation of trade cancellation
+    - NOVATION_REQUEST # Request to novate a trade
+    - NOVATION_ACCEPT  # Acceptance of novation
+    - EXERCISE_NOTICE  # Option/swaption exercise notice
+    - INTERNAL_TRANSFER # Internal book-to-book transfer

@@ -1,0 +1,131 @@
+# =============================================================================
+# ENTITY - Legal entities, trading desks, CCPs, brokers
+# =============================================================================
+blueprint: schema
+kind: Entity
+qualifier: "fte-"
+xid: entity_id|name
+xns: [id, xid]
+description: "Legal entity with funding, settlement, and clearing parameters"
+icon: building
+extends: _system.yaml
+operation: MERGE
+
+# Reuses shared partial schemas
+includes:
+  - shared/schemas/_party.yaml       # party_type (mapped to entity_type), short_name, status
+  - shared/schemas/_contact.yaml     # contacts list (multiple contact persons)
+  - shared/schemas/_identifiers.yaml # identifiers dict (lei, bic, duns)
+  - shared/schemas/_address.yaml     # addresses list (registered + branch)
+
+sections:
+  - name: identity
+    label: "Identity"
+    icon: building
+  - name: contact
+    label: "Contacts"
+    icon: phone
+    collapsible: true
+  - name: addresses
+    label: "Addresses"
+    icon: map-pin
+    collapsible: true
+  - name: settlement
+    label: "Settlement"
+    icon: repeat
+    collapsible: true
+  - name: hierarchy
+    label: "Hierarchy"
+    icon: git-branch
+    collapsible: true
+  - name: system
+    label: "System"
+    icon: settings
+    collapsible: true
+    default_open: false
+
+views:
+  - type: table
+    label: "Entity Directory"
+    icon: table
+    default: true
+  - type: card
+    label: "Entity Cards"
+    icon: layout-grid
+    title: name
+    subtitle: entity_type
+    badge: status
+  - type: bar
+    label: "By Type"
+    icon: bar-chart
+    x: entity_type
+    y: $count
+
+model:
+  fields:
+    # ── Identity (from _party) ──
+    entity_id: { type: str, required: true, key: true, rank: hero, grid: "3", group: identity, col: 3, placeholder: "ENT-001" }
+    entity_type: { type: str, required: true, facet: true, grid: "3", rank: hero, group: identity, widget: select, enum: $enums.ENUM_ENTITY_TYPE, col: "2<", description: "Maps to _party.party_type — entity classification" }
+    name: { type: str, required: true, fuzzy: true, grid: "4", rank: hero, group: identity, card: title, placeholder: "Acme Capital LLC", col: "1<", description: "From _party.party_name — full legal name" }
+    short_name: { type: str, fuzzy: true, grid: "2", group: identity, placeholder: "ACME", description: "From _party.short_name — abbreviation or trading name" }
+    status: { type: str, facet: true, grid: "2", group: identity, card: badge, widget: select, enum: $enums.ENUM_ENTITY_STATUS, col: 4, default: ACTIVE, description: "From _party.status — lifecycle status" }
+
+    # ── Identifiers (from _identifiers — finance subset) ──
+    identifiers:
+      type: dict
+      grid: "12"
+      group: identity
+      collapsed: true
+      description: "From _identifiers — regulatory identifiers (finance subset)"
+      items:
+        lei: { type: str, grid: "4", placeholder: "5493001KJTIIGC8Y1R12", description: "Legal Entity Identifier (ISO 17442)" }
+        bic: { type: str, grid: "4", placeholder: "DEUTDEFF", description: "SWIFT BIC (ISO 9362)" }
+        duns: { type: str, grid: "4", placeholder: "12-345-6789", description: "D-U-N-S Number" }
+
+    # ── Contacts (from _contact — list pattern for multiple contact persons) ──
+    contacts:
+      type: list
+      grid: "12"
+      group: contact
+      alias: "Contact Persons"
+      widget: table
+      description: "From _contact — multiple contact persons per entity (ops, legal, trading, settlement)"
+      items:
+        type: dict
+        items:
+          contact_type: { type: str, grid: "2", widget: select, enum: [OPS, LEGAL, TRADING, SETTLEMENT, COMPLIANCE, PRIMARY], description: "Contact role" }
+          name: { type: str, grid: "3", fuzzy: true, description: "Contact person name" }
+          email: { type: str, grid: "3", widget: email, description: "From _contact — email" }
+          phone: { type: str, grid: "2", widget: tel, description: "From _contact — phone (E.164)" }
+          primary: { type: bool, grid: "2", default: false, description: "Primary contact for this role" }
+
+    # ── Addresses (from _address — list pattern for registered + branch) ──
+    addresses:
+      type: list
+      grid: "12"
+      group: addresses
+      alias: "Addresses"
+      widget: table
+      description: "From _address — registered office + branch addresses"
+      items:
+        type: dict
+        items:
+          address_type: { type: str, grid: "2", widget: select, enum: [REGISTERED, BRANCH, MAILING, BILLING], default: REGISTERED }
+          line1: { type: str, grid: "4", placeholder: "Street address" }
+          line2: { type: str, grid: "3", placeholder: "Suite, floor" }
+          city: { type: str, grid: "3", fuzzy: true }
+          state: { type: str, grid: "3" }
+          postal_code: { type: str, grid: "3", placeholder: "Postal/ZIP" }
+          country: { type: str, grid: "3", widget: select, description: "ISO 3166-1 alpha-2" }
+
+    # ── Settlement ──
+    funding_ccy: { type: str, facet: true, grid: "3", group: settlement, widget: select, enum: $enums.ENUM_CCY, description: "Primary funding currency" }
+    settlement_ccys: { type: list, grid: "6", group: settlement, widget: tags, description: "Supported settlement currencies" }
+    default_ssi_id: { type: str, grid: "3", group: settlement, placeholder: "SSI-001", description: "Standard Settlement Instructions ID" }
+
+    # ── Hierarchy ──
+    parent_entity_id: { type: str, grid: "6", group: hierarchy, widget: autocomplete, ref: entities.name, description: "Parent legal entity" }
+    subsidiaries: { type: list, grid: "6", group: hierarchy, widget: tags, description: "Subsidiary entity IDs" }
+
+    # ── Extended metadata ──
+    xmeta: { type: dict, grid: "12", group: settlement, collapsed: true, description: "Extended entity metadata (ratings, netting, CSA)" }

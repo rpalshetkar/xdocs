@@ -1,0 +1,38 @@
+# =============================================================================
+# AUCTION_BID Payload — Bond Auction Bid
+# =============================================================================
+# event_type: AUCTION_BID
+# Flow: Primary dealer submits bid to BUY bonds at treasury/corporate auction
+# Lifecycle: ANNOUNCED → OPEN → CLOSED → AWARDED (full/partial/zero) → SETTLED
+# =============================================================================
+blueprint: partial
+description: "Auction bid payload — competitive or non-competitive bid at bond auction"
+
+fields:
+  auction_id:         { type: str, required: true, description: "Auction identifier (e.g., 912810TV0 for UST)" }
+  issuer:             { type: str, required: true, description: "Issuing entity (US Treasury, UK DMO, corporate)" }
+  security_desc:      { type: str, required: true, description: "Security description (e.g., 10Y UST 4.25% 02/35)" }
+  product_type:       { type: str, required: true, enum: $enums.ENUM_PRODUCT_TYPE }
+  ccy:                { type: str, required: true, enum: $enums.ENUM_CCY }
+
+  # Bid details
+  bid_type:           { type: str, enum: [COMPETITIVE, NON_COMPETITIVE], required: true }
+  bid_yield:          { type: float, description: "Yield bid (for competitive bids)" }
+  bid_price:          { type: float, description: "Price bid (for competitive bids)" }
+  bid_amount:         { type: float, required: true, description: "Face amount bid" }
+  bid_count:          { type: int, default: 1, description: "Number of bids submitted (tiered pricing)" }
+
+  # Auction metadata
+  auction_date:       { type: str, widget: datepicker, description: "Auction date" }
+  settlement_date:    { type: str, widget: datepicker, description: "Settlement/issue date" }
+  maturity_date:      { type: str, widget: datepicker, description: "Maturity date" }
+  coupon:             { type: float, description: "Coupon rate" }
+  auction_type:       { type: str, enum: $enums.ENUM_AUCTION_TYPE, default: NEW_ISSUE }
+
+  # Result (populated after auction closes)
+  awarded_amount:     { type: float, description: "Amount awarded to this bidder" }
+  stop_yield:         { type: float, description: "Auction stop-out yield (highest accepted)" }
+  stop_price:         { type: float, description: "Auction stop-out price" }
+  bid_to_cover:       { type: float, description: "Auction bid-to-cover ratio" }
+  allotment_pct:      { type: float, description: "Percentage of bid awarded (100=full, <100=partial, 0=miss)" }
+  auction_status:     { type: str, enum: $enums.ENUM_AUCTION_STATUS, default: OPEN }

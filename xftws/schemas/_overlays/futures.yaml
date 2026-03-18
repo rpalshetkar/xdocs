@@ -1,0 +1,31 @@
+# =============================================================================
+# OVERLAY: FUTURES — Contract specifications, delivery, margin
+# =============================================================================
+blueprint: partial
+description: "Futures overlay — contract specs, delivery, margin, roll"
+
+fields:
+  contract_size:      { type: float, grid: "3", bbg: [FUT_CONT_SIZE], description: "Contract size (units per lot)" }
+  val_per_point:      { type: float, grid: "3", bbg: [FUT_VAL_PT], description: "Dollar value per point" }
+  tick_size:          { type: float, grid: "3", bbg: [FUT_TICK_SIZE], description: "Minimum price increment" }
+  tick_val:           { type: float, grid: "3", bbg: [FUT_TICK_VAL], description: "Dollar value per tick" }
+  contract_month:     { type: str, grid: "3", bbg: [FUT_MONTH_YR], description: "Contract month/year" }
+  # Dates
+  first_trade_date:   { type: date, grid: "3", bbg: [FUT_FIRST_TRADE_DT], description: "First trading date" }
+  last_trade_date:    { type: date, grid: "3", bbg: [LAST_TRADEABLE_DT], description: "Last trading date" }
+  first_notice_date:  { type: date, grid: "3", bbg: [FUT_NOTICE_FIRST], description: "First delivery notice date" }
+  first_delivery_date: { type: date, grid: "3", bbg: [FUT_DLV_DT_FIRST], description: "First delivery date" }
+  last_delivery_date: { type: date, grid: "3", bbg: [FUT_DLV_DT_LAST], description: "Last delivery date" }
+  # Delivery
+  delivery_type:      { type: str, grid: "3", enum: [PHYSICAL, CASH, EFP], description: "Settlement type" }
+  delivery_grade:     { type: str, grid: "3", description: "Deliverable grade specification" }
+  delivery_location:  { type: str, grid: "3", description: "Delivery point/warehouse" }
+  # Margin
+  initial_margin:     { type: float, grid: "3", bbg: [FUT_INIT_SPEC_ML], description: "Initial speculative margin" }
+  maint_margin:       { type: float, grid: "3", bbg: [FUT_MAINT_SPEC_ML], description: "Maintenance margin" }
+  # Roll
+  roll_date:          { type: date, grid: "3", bbg: [FUT_ROLL_DT], description: "Roll date" }
+  generic_ticker:     { type: str, grid: "3", bbg: [FUT_CUR_GEN_TICKER], description: "Current front-month generic ticker" }
+  # Bond futures
+  ctd_ticker:         { type: str, grid: "3", bbg: [FUT_CTD_TICKER], description: "Cheapest-to-deliver bond" }
+  ctd_conversion:     { type: float, grid: "3", bbg: [FUT_CTD_CNVS_FACTOR], description: "CTD conversion factor" }

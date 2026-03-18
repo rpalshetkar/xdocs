@@ -1,0 +1,20 @@
+# =============================================================================
+# BROKER_FILL Payload — External Broker Fill
+# =============================================================================
+# event_type: BROKER_FILL
+# Flow: Broker execution report (FIX 35=8) with fill details
+# =============================================================================
+blueprint: partial
+description: "Broker fill payload — execution report from external broker"
+
+fields:
+  broker_entity_id:  { type: str, required: true, ref: entities.name }
+  exec_id:           { type: str, required: true, description: "Broker execution ID (FIX Tag 17)" }
+  price:             { type: float, required: true, description: "Fill price/rate" }
+  qty:               { type: float, required: true, description: "Fill quantity/notional" }
+  venue:             { type: str, description: "Execution venue (FIX Tag 30)" }
+  commission:        { type: float, description: "Commission amount" }
+  commission_bps:    { type: float, description: "Commission in basis points" }
+  product_type:      { type: str, enum: $enums.ENUM_PRODUCT_TYPE }
+  ccy:               { type: str, enum: $enums.ENUM_CCY }
+  exec_type:         { type: str, enum: [NEW, PARTIAL, FILL, CANCEL, REPLACE], description: "Execution type (FIX Tag 150)" }

@@ -1,0 +1,52 @@
+# XFTWS Settings - Fixed Income, Currencies & Commodities Trading
+
+app:
+  name: xftws
+  tz: America/New_York
+  env: ${oc.env:XDS_ENV,dev}
+  debug: false
+  log_level: INFO
+
+# System paths
+paths:
+  root: ${oc.env:XDS_PATHS_ROOT,.}
+  var: ${oc.env:XDS_PATHS_VAR,/tmp/xds/var}
+  configs: ${paths.root}/config
+  artifacts: .
+  demos: ../../..
+
+# XDS-specific configuration
+xds:
+  assembly: ./assembly.yaml
+  strict: true
+  root: ${paths.root}
+
+# API Configuration
+api:
+  host: 0.0.0.0
+  port: 8000
+  workers: 2
+  reload: false
+
+# MongoDB (from secrets with mock fallback)
+mongo:
+  uri: ${oc.select:secrets.mongo.uri,mock://localhost}
+  db: xftws
+  options:
+    server_selection_timeout_ms: 5000
+    connect_timeout_ms: 5000
+    max_pool_size: 20
+
+# Redis (from secrets with mock fallback)
+redis:
+  host: ${oc.select:secrets.redis.host,mock}
+  port: ${oc.select:secrets.redis.port,6379}
+  db: ${oc.select:secrets.redis.db,0}
+
+# Feature Flags
+features:
+  qwik_cache: true
+  redis_pubsub: true
+  websockets: true
+  audit_logging: true
+  field_encryption: true

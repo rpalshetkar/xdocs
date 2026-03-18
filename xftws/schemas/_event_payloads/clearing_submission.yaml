@@ -1,0 +1,34 @@
+# =============================================================================
+# CLEARING_SUBMISSION Payload — Direct CCP Clearing Submission
+# =============================================================================
+# event_type: CLEARING_SUBMISSION
+# Flow: Bilateral trade submitted directly to CCP for clearing acceptance
+# Distinct from CLEARING_MSG which is the CCP's response/novation
+# Lifecycle: PENDING → SUBMITTED → PENDING_CPTY → ACCEPTED | REJECTED | EXPIRED
+# =============================================================================
+blueprint: partial
+description: "Direct clearing submission — bilateral trade sent to CCP for acceptance"
+
+fields:
+  ccp:                 { type: str, required: true, description: "Target CCP (LCH, CME, ICE, JSCC, SHCH)" }
+  submission_ref:      { type: str, required: true, description: "Middleware submission reference" }
+  trade_event_id:      { type: str, required: true, description: "Event ID of the trade being submitted" }
+  middleware:          { type: str, description: "Clearing middleware (MarkitWire, Traiana, ICE Link)" }
+
+  # Trade economics being cleared
+  product_type:        { type: str, required: true, enum: $enums.ENUM_PRODUCT_TYPE }
+  notional:            { type: float, required: true }
+  ccy:                 { type: str, required: true, enum: $enums.ENUM_CCY }
+  our_entity_id:       { type: str, description: "Our legal entity submitting" }
+  cpty_entity_id:      { type: str, description: "Counterparty (will be novated to CCP)" }
+
+  # Clearing-specific
+  clearing_account:    { type: str, description: "CCP clearing account / member ID" }
+  clearing_category:   { type: str, enum: $enums.ENUM_CLEARING_CATEGORY, description: "Clearing category" }
+  netting_set:         { type: str, description: "Netting set identifier at CCP" }
+
+  # Submission lifecycle
+  submission_status:   { type: str, enum: $enums.ENUM_SUBMISSION_STATUS, default: PENDING }
+  rejection_reason:    { type: str, description: "CCP rejection reason (if rejected)" }
+  cpty_status:         { type: str, enum: [PENDING, AFFIRMED, REJECTED], description: "Counterparty affirmation status" }
+  expected_margin:     { type: float, description: "Estimated IM requirement" }

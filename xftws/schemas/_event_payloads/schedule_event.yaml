@@ -1,0 +1,20 @@
+# =============================================================================
+# SCHEDULE_EVENT Payload — Cashflow Schedule Event
+# =============================================================================
+# event_type: SCHEDULE_EVENT
+# Flow: Payment, reset, fixing, coupon, or maturity event on a trade leg
+# =============================================================================
+blueprint: partial
+description: "Schedule event — cashflow or lifecycle event on a trade leg"
+
+fields:
+  trade_event_id:  { type: str, required: true, description: "Parent trade event ID" }
+  leg_id:          { type: str, required: true, description: "Leg identifier within trade" }
+  event_subtype:   { type: str, required: true, enum: $enums.ENUM_EVENT_TYPE, description: "PAYMENT, RESET, FIXING, COUPON, MATURITY" }
+  date:            { type: str, required: true, widget: datepicker }
+  amount:          { type: float, description: "Cashflow amount (signed)" }
+  ccy:             { type: str, enum: $enums.ENUM_CCY }
+  index:           { type: str, description: "Reference index for resets (SOFR, EURIBOR)" }
+  fixing_rate:     { type: float, description: "Fixed rate at fixing date" }
+  fixing_source:   { type: str, description: "Rate source (e.g., ICE, Bloomberg)" }
+  schedule_status: { type: str, enum: $enums.ENUM_SCHEDULE_STATUS, default: SCHEDULED }

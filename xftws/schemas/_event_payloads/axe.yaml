@@ -1,0 +1,40 @@
+# =============================================================================
+# AXE Payload — Indication of Interest / Axe
+# =============================================================================
+# event_type: AXE
+# Flow: Dealer publishes indicative interest → clients may respond with RFQ
+# Lifecycle: LIVE → UPDATED → FILLED | WITHDRAWN | EXPIRED
+# =============================================================================
+blueprint: partial
+description: "Axe/IOI payload — indicative pricing broadcast to market or named recipients"
+
+fields:
+  direction:         { type: str, required: true, enum: $enums.ENUM_DIRECTION, description: "BUY or SELL from dealer perspective" }
+  product_type:      { type: str, required: true, enum: $enums.ENUM_PRODUCT_TYPE }
+  ticker:            { type: str, required: true, description: "Security identifier (e.g., AAPL 4.5 03/28, T 3.875 01/30)" }
+  notional:          { type: float, required: true, description: "Indicative size" }
+  ccy:               { type: str, required: true, enum: $enums.ENUM_CCY }
+  indicative_price:  { type: float, description: "Indicative price level (not firm)" }
+  indicative_spread: { type: float, description: "Indicative spread over benchmark" }
+  benchmark:         { type: str, description: "Benchmark reference (e.g., UST 5Y, SOFR, Mid-Swap)" }
+  min_size:          { type: float, description: "Minimum trade size willing to transact" }
+  max_size:          { type: float, description: "Maximum size willing to show" }
+
+  # Axe classification
+  axe_type:          { type: str, enum: $enums.ENUM_AXE_TYPE, default: NATURAL }
+  axe_status:        { type: str, enum: $enums.ENUM_AXE_STATUS, default: LIVE }
+
+  # Distribution
+  visibility:        { type: str, enum: $enums.ENUM_AXE_VISIBILITY, default: PUBLIC, description: "Who sees this axe" }
+  venue:             { type: str, enum: $enums.ENUM_VENUE, description: "Venue where axe is published" }
+  target_entity_ids: { type: list, description: "Recipient entity IDs for TIERED/PRIVATE visibility" }
+
+  # Validity
+  valid_from:        { type: str, widget: datetime, description: "When axe becomes active" }
+  valid_until:       { type: str, widget: datetime, description: "Axe expiry (auto-withdraws)" }
+  revision:          { type: int, default: 1, description: "Version number (increments on update)" }
+  withdraw_reason:   { type: str, description: "Reason for withdrawal (e.g., filled elsewhere, market moved)" }
+
+  # Response tracking
+  rfq_count:         { type: int, default: 0, description: "Number of RFQs received in response to this axe" }
+  fill_event_id:     { type: str, description: "Event ID of trade that filled this axe" }

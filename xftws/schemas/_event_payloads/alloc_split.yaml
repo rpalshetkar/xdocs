@@ -1,0 +1,27 @@
+# =============================================================================
+# ALLOC_SPLIT Payload — Block Trade Allocation Split
+# =============================================================================
+# event_type: ALLOC_SPLIT
+# Flow: Block trade split across client accounts
+# =============================================================================
+blueprint: partial
+description: "Allocation split — portion of block trade assigned to client account"
+
+fields:
+  block_event_id:  { type: str, required: true, description: "Parent block trade event ID" }
+  account:         { type: str, required: true, description: "Client account for this allocation" }
+  entity_id:       { type: str, required: true, ref: entities.name }
+  quantity:        { type: float, required: true, description: "Allocated notional/quantity" }
+  book_id:         { type: str, required: true, ref: books.name }
+  split_num:       { type: int, description: "Split sequence number (1 of N)" }
+  total_splits:    { type: int, description: "Total number of allocation splits" }
+  price:           { type: float, description: "Allocation price (may differ from block)" }
+  fees:
+    type: list
+    description: "Fees applied to this allocation"
+    items:
+      type: dict
+      items:
+        fee_type:  { type: str, enum: $enums.ENUM_FEE_TYPE }
+        amount:    { type: float }
+        ccy:       { type: str, enum: $enums.ENUM_CCY }

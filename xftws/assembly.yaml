@@ -1,0 +1,667 @@
+# =============================================================================
+# XFTWS ASSEMBLY — Fixed Income, Currencies & Commodities Trading
+# =============================================================================
+# App: xftws
+# Purpose: Trade lifecycle, risk analytics, matching, and settlement
+# Features: Event-driven matching engine, FpML templates, 19-state workflow,
+#            real-time event streaming, field-level encryption, full RBAC
+# =============================================================================
+
+blueprint: assembly
+extends: ../../shared/base-assembly.yaml
+name: xftws
+description: "Fixed income, currencies & commodities — event-driven trade lifecycle"
+icon: trending-up
+
+# Vocabulary files
+vocabs:
+  - shared/vocabs/generic.yaml
+  - vocabs/xftws.yaml
+
+# Domain taxonomy
+taxonomy:
+  ontology: ontology.yaml
+
+# Mock data generation params (kwargs → gen_fixtures)
+mock:
+  params: { count: 30 }
+
+# =============================================================================
+# API CONFIGURATION
+# =============================================================================
+api:
+  limits:
+    max: 2000
+    cursor_threshold: 500
+  cache:
+    max_size: 500
+  auth:
+    enabled: true
+    mode: policy
+    policies:
+      - name: dev-bypass
+        match:
+          origins: [localhost, 127.0.0.1]
+          environments: [dev, local, fixture]
+        action: allow
+        scopes: [admin]
+      - name: health-public
+        match:
+          paths: ["/xapi/system/*", "/xapi/meta/*"]
+        action: allow
+        scopes: [read]
+      - name: user-auth
+        match:
+          headers:
+            Authorization: "Bearer *"
+        action: require
+        provider: jwt
+      - name: default
+        action: deny
+
+# =============================================================================
+# VARIABLES
+# =============================================================================
+vars:
+  app: xftws
+  env: staging
+  region: iad
+  memory: 512
+  realtime_ttl: 30
+
+# =============================================================================
+# DEFAULTS
+# =============================================================================
+defaults:
+  repo:
+    mode: POWER
+    capabilities:
+      audit: true
+
+# =============================================================================
+# CONNECTORS
+# =============================================================================
+connectors:
+  db:
+    kind: mongodb
+    uri: ${envctx.mongo.uri}
+    db: ${vars.local_db}
+    encryption:
+      enabled: true
+      key_vault:
+        db: __encryption
+        collection: __keyVault
+      kms_provider: ${envctx.encryption.provider}
+
+  qwik:
+    kind: qwik
+    strategy: invalidate
+    layers:
+      cache: cache
+      core: db
+
+# =============================================================================
+# SCHEMAS
+# =============================================================================
+# Event-centric: 3 reference schemas + 1 unified event schema
+# =============================================================================
+schemas:
+  _enums: schemas/_enums.yaml
+  entity: schemas/entity.yaml
+  book: schemas/book.yaml
+  fpml: schemas/fpml.yaml
+  event: schemas/event.yaml
+
+# =============================================================================
+# DATASETS
+# =============================================================================
+# v2: 3 reference datasets + 1 polymorphic event dataset + 1 view
+# All trades, legs, schedules, matches, allocations, amendments, and measures
+# are now event_type variants within the unified events collection
+# =============================================================================
+datasets:
+  entities:
+    connector: ${connectors.qwik}
+    schema: entity
+    dset: entities
+    itype: polars
+    otype: auto
+    capabilities:
+      read: true
+      write: true
+      cache: true
+      streaming: false
+    streaming:
+      key: entity_id
+    mock:
+      generator: domains.xftws.server.mock_data:gen_fixtures
+      count: 20
+    meta:
+      icon: building
+      node: XFTWS/REFERENCE/ENTITIES
+      owner: operations_team
+      tags: [entities, reference]
+      description: Legal entities, CCPs, brokers with LEI
+
+  books:
+    connector: ${connectors.qwik}
+    schema: book
+    dset: books
+    itype: polars
+    otype: auto
+    capabilities:
+      read: true
+      write: true
+      cache: true
+      streaming: false
+    streaming:
+      key: book_id
+    meta:
+      icon: book-open
+      node: XFTWS/REFERENCE/BOOKS
+      owner: operations_team
+      tags: [books, reference]
+      description: Trading books/portfolios per entity
+
+  fpmls:
+    connector: ${connectors.qwik}
+    schema: fpml
+    dset: fpmls
+    itype: polars
+    otype: auto
+    capabilities:
+      read: true
+      write: true
+      cache: true
+      streaming: false
+    streaming:
+      key: fpml_id
+    meta:
+      icon: file-code
+      node: XFTWS/REFERENCE/FPMLS
+      owner: operations_team
+      tags: [fpmls, products, reference]
+      description: ISDA FpML product templates
+
+  events:
+    connector: ${connectors.qwik}
+    schema: event
+    dset: events
+    itype: polars
+    otype: auto
+    otype_threshold: 500
+    capabilities:
+      read: true
+      write: true
+      cache: false
+      streaming: true
+    streaming:
+      enabled: true
+      interval: 2000
+      op: append
+      key: event_id
+      limit: 100
+    mock:
+      generator: domains.xftws.server.mock_data:gen_fixtures
+      count: 200
+    meta:
+      icon: activity
+      node: XFTWS/EVENTS
+      owner: trading_team
+      tags: [events, core, matching, lifecycle, streaming]
+      description: Unified event log — all business actions (bookings, fills, amendments, risk, etc.)
+
+  # ---------------------------------------------------------------------------
+  # VIEW: Trade blotter — matched events enriched with entity/book context
+  # ---------------------------------------------------------------------------
+  trade_blotter:
+    type: view
+    source: events
+    schema: event
+    joins:
+      - dataset: entities
+        "on": { entity_id: entity_id }
+        select: [short_name, entity_type, lei]
+        type: left
+      - dataset: books
+        "on": { book_id: book_id }
+        select: [book_name, desk, strategy]
+        type: left
+    capabilities:
+      read: true
+      write: false
+      cache: false
+      streaming: true
+    meta:
+      icon: table
+      node: XFTWS/VIEWS/TRADE_BLOTTER
+      owner: trading_team
+      tags: [view, trades, blotter, enriched]
+      description: Events enriched with entity and book context for trade blotter
+
+# =============================================================================
+# WORKFLOW — 19-state event lifecycle (consumed by xds.workflows.engine)
+# =============================================================================
+# Convention: UPPERCASE keys = state transitions, lowercase = config blocks
+# Engine: xds.workflows.spec.compile_workflow() parses this block
+# =============================================================================
+workflow:
+  field: status
+
+  # ── State transitions (from → [allowed targets]) ──
+  PENDING: [QUOTED, OPEN, UNMATCHED, CANCELLED]
+  QUOTED: [ACCEPTED, REJECTED, EXPIRED]
+  ACCEPTED: [UNMATCHED]
+  OPEN: [PARTIAL_FILL, FILLED, CANCELLED]
+  PARTIAL_FILL: [FILLED, CANCELLED]
+  FILLED: [UNMATCHED]
+  UNMATCHED: [PARTIAL, MATCHED, FORCED, CANCELLED]
+  PARTIAL: [MATCHED, CANCELLED]
+  MATCHED: [CONFIRMED, DISPUTED]
+  DISPUTED: [RESOLVED, CANCELLED]
+  RESOLVED: [CONFIRMED]
+  FORCED: [CONFIRMED]
+  CONFIRMED: [CLEARED, SETTLED, CANCELLED]
+  CLEARED: [SETTLED]
+
+  # ── Transition rules (role guards, required fields, auto-sets) ──
+  rules:
+    QUOTED:
+      role: [sales, trading]
+      needs: [payload.rate, payload.notional]
+      sets: { quoted_at: $now }
+    ACCEPTED:
+      role: [sales, trading]
+      sets: { accepted_at: $now }
+    MATCHED:
+      role: [operations, admin]
+      sets: { matched_at: $now }
+      event: match_completed
+    FORCED:
+      role: [operations, admin]
+      needs: [correlation.resolution]
+      confirm: true
+      sets: { matched_at: $now, matched_by: $user }
+    CONFIRMED:
+      role: [operations, admin]
+      needs: [correlation.match_status]
+      sets: { confirmed_at: $now }
+    CLEARED:
+      role: [operations, admin]
+      needs: [payload.clearing_ref]
+      sets: { cleared_at: $now }
+      event: trade_cleared
+    SETTLED:
+      role: [operations, admin]
+      needs: [payload.settlement_ref]
+      sets: { settled_at: $now }
+      event: trade_settled
+    CANCELLED:
+      role: [trading, operations, admin]
+      needs: [payload.cancel_reason]
+      confirm: true
+      sets: { cancelled_at: $now }
+    DISPUTED:
+      role: [operations, compliance, admin]
+      needs: [correlation.breaks]
+      sets: { disputed_at: $now }
+    RESOLVED:
+      role: [operations, admin]
+      needs: [correlation.resolution]
+      sets: { resolved_at: $now }
+    REJECTED:
+      role: [sales, trading]
+      sets: { rejected_at: $now }
+
+  # ── SLA timers (regulatory & operational deadlines) ──
+  sla:
+    PENDING: 1h
+    QUOTED: 4h
+    UNMATCHED: 24h
+    DISPUTED: 48h
+    CONFIRMED: 24h
+    CLEARED: 48h
+
+# =============================================================================
+# CORRELATIONS — Matching engine config (consumed by xds.correlations)
+# =============================================================================
+# Each scenario maps to one of 5 foundation primitives:
+#   CORRELATION (1:1), RECONCILIATION (diff), ALLOCATION (1:N),
+#   AGGREGATION (N:1), OVERRIDE (force)
+# Engine: ReconciliationEngine + CorrelationExecutor from xds.correlations
+# =============================================================================
+correlations:
+
+  # ── CORRELATION primitive (1:1 event pairing) ──
+  sales_trader:
+    primitive: CORRELATION
+    description: "Sales booking ↔ Trading booking — same trade, two desks"
+    cardinality: ONE_TO_ONE
+    lhs: { event_type: SALES_BOOKING }
+    rhs: { event_type: TRADING_BOOKING }
+    key_fields: [cpty_id, product_type, book_id]
+    tolerance_fields:
+      payload.notional: 0.01
+      payload.rate: 0.0001
+    compare_fields: [payload.notional, payload.rate, payload.currency, payload.trade_date, payload.value_date]
+    on_match: materialize_trade
+    on_break: flag_for_review
+
+  back_to_back:
+    primitive: CORRELATION
+    description: "Client-facing trade ↔ hedge/risk trade — mirror economics"
+    cardinality: ONE_TO_ONE
+    lhs: { event_type: SALES_BOOKING, source: SALES_DESK }
+    rhs: { event_type: TRADING_BOOKING, source: TRADING_DESK }
+    key_fields: [product_type, payload.currency_pair]
+    tolerance_fields:
+      payload.notional: 0.01
+      payload.rate: 0.0001
+    compare_fields: [payload.notional, payload.rate, payload.currency, payload.trade_date]
+    equivalence_rules:
+      payload.direction:
+        - [PAY, RECEIVE]
+    on_match: materialize_trade
+    on_break: flag_for_review
+
+  rfq_response:
+    primitive: CORRELATION
+    description: "RFQ ↔ QUOTE — client request matched to dealer response"
+    cardinality: ONE_TO_ONE
+    lhs: { event_type: RFQ }
+    rhs: { event_type: QUOTE }
+    key_fields: [cpty_id, product_type]
+    compare_fields: [payload.notional, payload.currency, payload.tenor]
+    on_match: auto_link
+
+  competitive_rfq:
+    primitive: CORRELATION
+    description: "Competitive RFQ — 1 client RFQ ↔ N dealer quotes, best quote wins"
+    cardinality: ONE_TO_MANY
+    lhs: { event_type: RFQ }
+    rhs: { event_type: QUOTE }
+    key_fields: [cpty_id, product_type]
+    compare_fields: [payload.notional, payload.currency, payload.tenor]
+    on_match: rank_and_select_best
+    on_complete: mark_losers_traded_away
+
+  broker_exec:
+    primitive: CORRELATION
+    description: "ORDER ↔ BROKER_FILL — order matched to broker execution"
+    cardinality: ONE_TO_ONE
+    lhs: { event_type: ORDER }
+    rhs: { event_type: BROKER_FILL }
+    key_fields: [cpty_id, product_type, payload.order_ref]
+    tolerance_fields:
+      payload.notional: 0.01
+      payload.rate: 0.001
+    compare_fields: [payload.notional, payload.rate, payload.currency]
+    on_match: auto_link
+
+  stp_autobook:
+    primitive: CORRELATION
+    description: "STP_MESSAGE → auto-generated TRADING_BOOKING"
+    cardinality: ONE_TO_ONE
+    lhs: { event_type: STP_MESSAGE }
+    rhs: { event_type: TRADING_BOOKING, source: STP_PIPELINE }
+    key_fields: [raw.source_msg_id]
+    compare_fields: [payload.notional, payload.rate, payload.currency, payload.trade_date]
+    on_match: auto_link
+
+  obo_client:
+    primitive: CORRELATION
+    description: "OBO_TICKET ↔ TRADING_BOOKING — on-behalf-of client ticket"
+    cardinality: ONE_TO_ONE
+    lhs: { event_type: OBO_TICKET }
+    rhs: { event_type: TRADING_BOOKING }
+    key_fields: [cpty_id, product_type, book_id]
+    tolerance_fields:
+      payload.notional: 0.01
+    compare_fields: [payload.notional, payload.rate, payload.currency, payload.trade_date]
+    on_match: materialize_trade
+
+  clearing:
+    primitive: CORRELATION
+    description: "TRADE ↔ CLEARING_MSG — CCP novation confirmation"
+    cardinality: ONE_TO_ONE
+    lhs: { event_type: TRADE, status: CONFIRMED }
+    rhs: { event_type: CLEARING_MSG }
+    key_fields: [cpty_id, product_type, payload.uti]
+    tolerance_fields:
+      payload.notional: 0.01
+    compare_fields: [payload.notional, payload.currency, payload.value_date]
+    on_match: advance_to_cleared
+
+  cpty_affirm:
+    primitive: CORRELATION
+    description: "TRADE ↔ AFFIRM_MSG — counterparty affirmation"
+    cardinality: ONE_TO_ONE
+    lhs: { event_type: TRADE, status: CONFIRMED }
+    rhs: { event_type: AFFIRM_MSG }
+    key_fields: [cpty_id, product_type, payload.uti]
+    compare_fields: [payload.notional, payload.rate, payload.trade_date]
+    on_match: auto_link
+
+  giveup:
+    primitive: CORRELATION
+    description: "TRADE ↔ GIVEUP_NOTICE — transfer to prime broker"
+    cardinality: ONE_TO_ONE
+    lhs: { event_type: TRADE }
+    rhs: { event_type: GIVEUP_NOTICE }
+    key_fields: [payload.uti]
+    compare_fields: [payload.notional, payload.currency, cpty_id]
+    on_match: auto_link
+
+  trade_confirm:
+    primitive: CORRELATION
+    description: "SALES_BOOKING ↔ AFFIRM_MSG — direct confirmation"
+    cardinality: ONE_TO_ONE
+    lhs: { event_type: SALES_BOOKING }
+    rhs: { event_type: AFFIRM_MSG }
+    key_fields: [cpty_id, product_type]
+    compare_fields: [payload.notional, payload.rate, payload.trade_date]
+    on_match: advance_to_confirmed
+
+  # ── RECONCILIATION primitive (diff-based comparison) ──
+  amendment_recon:
+    primitive: RECONCILIATION
+    description: "AMENDMENT vs target trade — compute and apply diff"
+    lhs: { event_type: AMENDMENT }
+    rhs: { via_link: AMENDS }
+    key_fields: [event_id]
+    tolerance_fields:
+      payload.notional: 0.01
+      payload.rate: 0.0001
+    compare_fields: [payload.notional, payload.rate, payload.currency, payload.value_date, payload.trade_date]
+    on_match: apply_diff_to_transitions
+
+  eod_position:
+    primitive: RECONCILIATION
+    description: "POSITION_SNAPSHOT vs computed positions — EOD recon"
+    lhs: { event_type: POSITION_SNAPSHOT }
+    rhs: { computed: aggregate_trades_by_book }
+    key_fields: [book_id, product_type, payload.currency]
+    tolerance_fields:
+      payload.net_notional: 100.0
+      payload.mtm: 1.0
+      payload.dv01: 0.01
+    compare_fields: [payload.net_notional, payload.mtm, payload.dv01, payload.position_count]
+    on_break: raise_position_break
+
+  settlement_recon:
+    primitive: RECONCILIATION
+    description: "SETTLEMENT_INSTR vs CLEARED trades — payment matching"
+    lhs: { event_type: SETTLEMENT_INSTR }
+    rhs: { event_type: TRADE, status: CLEARED }
+    key_fields: [cpty_id, payload.currency, payload.value_date]
+    tolerance_fields:
+      payload.amount: 0.01
+    compare_fields: [payload.amount, payload.currency, payload.value_date]
+    on_match: advance_to_settled
+
+  margin_recon:
+    primitive: RECONCILIATION
+    description: "MARGIN_CALL vs computed exposure — VM/IA validation"
+    lhs: { event_type: MARGIN_CALL }
+    rhs: { computed: aggregate_exposure_by_cpty }
+    key_fields: [cpty_id, payload.margin_type]
+    tolerance_fields:
+      payload.call_amount: 100.0
+    compare_fields: [payload.call_amount, payload.currency, payload.value_date]
+    on_break: raise_margin_dispute
+
+  regulatory_recon:
+    primitive: RECONCILIATION
+    description: "Regulatory snapshot vs internal records — CFTC/EMIR compliance"
+    lhs: { event_type: POSITION_SNAPSHOT, source: REGULATORY }
+    rhs: { computed: aggregate_trades_by_uti }
+    key_fields: [payload.uti]
+    tolerance_fields:
+      payload.notional: 0.01
+    compare_fields: [payload.notional, payload.rate, payload.trade_date, payload.value_date]
+    on_break: raise_regulatory_break
+
+  # ── ALLOCATION primitive (1:N split) ──
+  block_alloc:
+    primitive: ALLOCATION
+    description: "Block TRADE → N ALLOC_SPLIT events — notional must sum"
+    cardinality: ONE_TO_MANY
+    parent: { event_type: TRADE }
+    children: { event_type: ALLOC_SPLIT, via_link: CHILD_OF }
+    validation:
+      sum_field: payload.notional
+      tolerance: 0.01
+      require_complete: true
+    on_complete: update_parent_status
+
+  order_fill:
+    primitive: ALLOCATION
+    description: "ORDER → N BROKER_FILL events — quantity must sum"
+    cardinality: ONE_TO_MANY
+    parent: { event_type: ORDER }
+    children: { event_type: BROKER_FILL, via_link: CHILD_OF }
+    validation:
+      sum_field: payload.quantity
+      tolerance: 0.001
+      require_complete: true
+    on_complete: update_parent_status
+
+  # ── AGGREGATION primitive (N:1 compression) ──
+  netting:
+    primitive: AGGREGATION
+    description: "N SETTLED trades → 1 NET_SETTLEMENT per cpty+ccy+date"
+    cardinality: MANY_TO_ONE
+    sources: { event_type: TRADE, status: SETTLED }
+    target: { event_type: NET_SETTLEMENT }
+    group_by: [cpty_id, payload.currency, payload.value_date]
+    aggregate:
+      payload.net_amount: sum
+      payload.trade_count: count
+    on_complete: create_net_settlement
+
+  compression:
+    primitive: AGGREGATION
+    description: "N offsetting trades → compressed single position"
+    cardinality: MANY_TO_ONE
+    sources: { event_type: TRADE, status: [CONFIRMED, CLEARED] }
+    target: { event_type: TRADE }
+    group_by: [cpty_id, product_type, payload.currency]
+    aggregate:
+      payload.notional: sum
+      payload.trade_count: count
+    filter: "payload.notional != 0"
+    on_complete: create_compressed_trade
+
+  # ── OVERRIDE primitive (manual intervention) ──
+  force_match:
+    primitive: OVERRIDE
+    description: "Operations manually pairs two events, bypassing matching rules"
+    role: [operations, admin]
+    confirm: true
+    needs: [correlation.resolution]
+    audit: full
+    on_apply: link_events_as_forced
+
+  dispute:
+    primitive: OVERRIDE
+    description: "Flag matched pair as disputed, route to resolution queue"
+    role: [operations, compliance, admin]
+    confirm: true
+    needs: [correlation.breaks]
+    audit: full
+    on_apply: flag_as_disputed
+
+# =============================================================================
+# PIPELINES — Event-driven flow DAGs (consumed by xds.flows)
+# =============================================================================
+# Each pipeline is a standalone YAML file following the Flow spec.
+# Engine: xds.flows sources/steps/sinks with EventBus + ReconciliationEngine
+# =============================================================================
+pipelines:
+  on_booking_received: pipelines/on_booking_received.yaml
+  on_external_message: pipelines/on_external_message.yaml
+  on_allocation_requested: pipelines/on_allocation_requested.yaml
+  on_settlement_due: pipelines/on_settlement_due.yaml
+  on_amendment_filed: pipelines/on_amendment_filed.yaml
+  on_position_snapshot: pipelines/on_position_snapshot.yaml
+  on_override_action: pipelines/on_override_action.yaml
+
+# =============================================================================
+# AUTHENTICATION & AUTHORIZATION
+# =============================================================================
+auth:
+  roles:
+    sales:
+      description: "Sales desk — create RFQs, bookings; view own trades"
+      scopes: [read, write]
+    trading:
+      description: "Trading desk — execute trades, manage positions; view desk-level"
+      scopes: [read, write]
+    operations:
+      description: "Operations — settlement, clearing, allocation; full event access"
+      scopes: [read, write]
+    risk:
+      description: "Risk management — read-only access to all events and risk measures"
+      scopes: [read]
+    compliance:
+      description: "Compliance — read-only with regulatory reporting access"
+      scopes: [read]
+    admin:
+      description: "System administrator — full access"
+      scopes: [read, write, delete, admin]
+
+  rbac:
+    datasets:
+      entities:
+        read: [sales, trading, operations, risk, compliance, admin]
+        write: [operations, admin]
+        delete: [admin]
+      books:
+        read: [sales, trading, operations, risk, compliance, admin]
+        write: [operations, admin]
+        delete: [admin]
+      fpmls:
+        read: [sales, trading, operations, risk, compliance, admin]
+        write: [operations, admin]
+        delete: [admin]
+      events:
+        read: [sales, trading, operations, risk, compliance, admin]
+        write: [sales, trading, operations, admin]
+        delete: [admin]
+      trade_blotter:
+        read: [sales, trading, operations, risk, compliance, admin]
+    default:
+      read: [admin]
+      write: [admin]
+
+# =============================================================================
+# ENCRYPTION KEYS
+# =============================================================================
+encryption:
+  keys:
+    - id: xftws_trade_economics_dek
+      desc: "DEK for trade economics — notional, price, spread, premium"
+    - id: xftws_counterparty_pii_dek
+      desc: "DEK for counterparty PII — contact info, SSIs, bank details"
+    - id: xftws_risk_measures_dek
+      desc: "DEK for risk sensitivities — Greeks, VaR, exposure values"

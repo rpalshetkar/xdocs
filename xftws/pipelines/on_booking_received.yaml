@@ -1,0 +1,85 @@
+# =============================================================================
+# FLOW: on_booking_received
+# =============================================================================
+# Trigger: SALES_BOOKING or TRADING_BOOKING event saved
+# Action: Attempt correlation with counterpart booking, materialize TRADE if matched
+# Primitive: CORRELATION (1:1)
+# Scenarios: SALES_TRADER, BACK_TO_BACK, OBO_CLIENT, STP_AUTOBOOK
+# =============================================================================
+
+flow: on_booking_received
+mode: inline
+on_error: dlq
+category: matching
+description: Correlate booking events and materialize trades on match
+
+source:
+  type: repo
+  repo: events
+  filter: "event_type IN ('SALES_BOOKING', 'TRADING_BOOKING', 'OBO_TICKET', 'STP_MESSAGE')"
+
+steps:
+  - name: classify_scenario
+    transform:
+      event_id: "$.event_id"
+      event_type: "$.event_type"
+      source: "$.source"
+      book_id: "$.book_id"
+      cpty_id: "$.cpty_id"
+      product_type: "$.product_type"
+      scenario: "$xu.classify_match_scenario($.event_type, $.source)"
+
+  - name: find_counterpart
+    transform:
+      counterpart_query:
+        book_id: "$.book_id"
+        cpty_id: "$.cpty_id"
+        product_type: "$.product_type"
+        status: UNMATCHED
+        exclude_event_id: "$.event_id"
+
+  - name: correlate
+    engine: reconciliation
+    config:
+      key_fields: [cpty_id, product_type, book_id]
+      tolerance_fields:
+        payload.notional: 0.01
+        payload.rate: 0.0001
+      compare_fields: [payload.notional, payload.rate, payload.currency, payload.trade_date, payload.value_date]
+
+  - name: update_match_status
+    filter: "$.correlation.match_status != 'UNMATCHED'"
+    transform:
+      lhs_update:
+        correlation:
+          match_type: CORRELATION
+          scenario: "$.scenario"
+          match_status: "$.correlation.match_status"
+          matched_at: "$now"
+        status: "$.correlation.match_status"
+        links:
+          - event_id: "$.counterpart.event_id"
+            rel: CORRELATES_WITH
+            role: RHS
+
+sinks:
+  - type: repo
+    repo: events
+    mode: save
+    filter: "$.correlation.match_status == 'MATCHED'"
+    map:
+      event_type: TRADE
+      source: MATCHING_ENG
+      status: CONFIRMED
+      links:
+        - event_id: "$.lhs.event_id"
+          rel: CREATED_FROM
+          role: LHS
+        - event_id: "$.rhs.event_id"
+          rel: CREATED_FROM
+          role: RHS
+  - type: event
+    channel: xds:xftws:match_result
+  - type: websocket
+    channel: xds:xftws:match_result
+    event_type: match_result

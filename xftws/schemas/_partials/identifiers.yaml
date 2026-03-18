@@ -1,0 +1,102 @@
+# =============================================================================
+# IDENTIFIERS — Security & trade identifiers (cross-product golden source)
+# =============================================================================
+# Two-tier design:
+#
+#   1. ids{}       — Golden canonical IDs (ISIN, FIGI, LEI). Fast access, unique.
+#   2. xrefs[]     — N×M cross-reference list for multiple sources × venues.
+#                    Handles: "Bloomberg calls it X, Refinitiv calls it Y,
+#                    on NASDAQ it's Z, on Frankfurt it's W."
+#
+# The ingest pipeline writes to xrefs[] on every source pipe.
+# A reconciliation job promotes the best xref to the golden ids{}.
+#
+# Usage: Instrument schemas, trade payloads, position schemas include
+#        these fields. Pick relevant subset — not all required per product.
+# =============================================================================
+
+blueprint: partial
+description: "Security & trade identifiers — golden IDs + multi-source cross-references"
+
+fields:
+
+  # ══════════════════════════════════════════════════════════════
+  # TIER 1: GOLDEN CANONICAL IDs — one per instrument, fast access
+  # ══════════════════════════════════════════════════════════════
+  # These are the "resolved" best identifiers. Promoted from xrefs[]
+  # by the reconciliation pipeline. Most queries hit ONLY these fields.
+  # ══════════════════════════════════════════════════════════════
+  ids:
+    type: dict
+    grid: "12"
+    group: identifiers
+    description: "Golden canonical identifiers — one authoritative value per type"
+    items:
+      # ── Universal (ISO standards) ──
+      isin:           { type: str, grid: "4", description: "ISO 6166 ISIN", placeholder: "US0378331005", bbg: [ID_ISIN] }
+      cusip:          { type: str, grid: "4", description: "CUSIP (N. America)", placeholder: "037833100", bbg: [ID_CUSIP] }
+      sedol:          { type: str, grid: "4", description: "SEDOL (UK)", bbg: [ID_SEDOL1] }
+      figi:           { type: str, grid: "4", description: "OpenFIGI (12-char)", placeholder: "BBG000B9XRY4", bbg: [ID_BB_GLOBAL] }
+      lei:            { type: str, grid: "4", description: "Legal Entity Identifier (ISO 17442, 20-char)" }
+      cfi_code:       { type: str, grid: "3", description: "Classification of Financial Instruments (ISO 10962)", bbg: [CFI_CODE] }
+
+      # ── Primary Display ──
+      ticker:         { type: str, grid: "4", description: "Primary display ticker (resolved from best source)", bbg: [TICKER] }
+      name:           { type: str, grid: "6", description: "Instrument display name", bbg: [NAME] }
+      mic:            { type: str, grid: "3", description: "Primary market MIC (ISO 10383)", placeholder: "XNGS", bbg: [ID_MIC_PRIM_EXCH] }
+      ccy:            { type: str, grid: "2", description: "Primary trading currency" }
+
+      # ── Regulatory / Trade ──
+      uti:            { type: str, grid: "4", description: "Unique Transaction Identifier (ISO 23897)" }
+      usi:            { type: str, grid: "4", description: "Unique Swap Identifier (CFTC)" }
+      upi:            { type: str, grid: "4", description: "Unique Product Identifier (ISO 4914)" }
+
+  # ══════════════════════════════════════════════════════════════
+  # TIER 2: CROSS-REFERENCES — multi-source, multi-venue mappings
+  # ══════════════════════════════════════════════════════════════
+  # Every ingest pipe appends here. Same instrument can have:
+  #   - FIGI from Bloomberg + FIGI from OpenFIGI API (should match)
+  #   - Ticker "AAPL" on XNGS, "APC" on XFRA, "0R2V" on XLON
+  #   - RIC "AAPL.O" from Refinitiv, "AAPL.OQ" for composite
+  #   - Internal ID "SEC-00042" from legacy system A
+  #   - RED code "2I65BY" from Markit (CDS reference entity)
+  #
+  # Reconciliation pipeline:
+  #   1. New xref arrives from source pipe
+  #   2. Check for conflicts (same id_type, different value)
+  #   3. If golden=true or highest priority source → promote to ids{}
+  #   4. Mark superseded xrefs as STALE
+  # ══════════════════════════════════════════════════════════════
+  xrefs:
+    type: list
+    grid: "12"
+    group: identifiers
+    collapsed: true
+    description: "All cross-referenced identifiers from all sources and venues"
+    items:
+      type: dict
+      items:
+        # ── What ──
+        id_type:        { type: str, required: true, grid: "3", enum: [ISIN, CUSIP, SEDOL, FIGI, FIGI_COMPOSITE, FIGI_SHARE_CLASS, TICKER, RIC, WKN, COMMON_CODE, VALOR, LEI, UTI, USI, UPI, RED, CLIP, GLOBEX, INTERNAL, CUSTOM], description: "Identifier type/namespace" }
+        value:          { type: str, required: true, grid: "4", description: "Identifier value" }
+
+        # ── From Where ──
+        source:         { type: str, required: true, grid: "3", enum: [BLOOMBERG, REFINITIV, ICE, MARKIT, CME, EUREX, LSE, DTCC, ANNA_DSB, OPENFIGI, EXCHANGE, REGULATOR, INTERNAL, CUSTODIAN, PRIME_BROKER, CCP, MANUAL], description: "Data source that provided this ID" }
+        source_system:  { type: str, grid: "3", description: "Specific system/feed name (e.g., 'B-PIPE', 'ELEKTRON', 'LEGACY-OMS-A')" }
+
+        # ── For Which Venue ──
+        venue_mic:      { type: str, grid: "3", description: "Venue MIC this ID applies to (null = universal)" }
+        venue_name:     { type: str, grid: "3", description: "Venue display name" }
+
+        # ── Priority & Status ──
+        golden:         { type: bool, grid: "2", default: false, description: "This is the authoritative/golden value for this id_type (promoted to ids{})" }
+        priority:       { type: int, grid: "2", default: 0, description: "Source priority (higher = more trusted). Used for conflict resolution" }
+        status:         { type: str, grid: "2", enum: [ACTIVE, STALE, SUPERSEDED, DISPUTED, PENDING_VERIFICATION], default: ACTIVE, description: "Xref status" }
+
+        # ── Lifecycle ──
+        effective_from: { type: str, grid: "3", description: "When this mapping became valid (ISO 8601)" }
+        effective_to:   { type: str, grid: "3", description: "When this mapping was superseded (null = still active)" }
+        received_at:    { type: str, grid: "3", description: "When we received this xref from the source" }
+
+        # ── Audit ──
+        notes:          { type: str, grid: "6", description: "Free text (e.g., 'Corporate action: ticker changed from FB to META')" }

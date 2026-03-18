@@ -1,0 +1,66 @@
+# =============================================================================
+# COLLATERAL — CSA, ISDA, margin, haircut, rehypothecation, XVA
+# =============================================================================
+
+blueprint: partial
+description: "Collateral management — CSA, margin, haircut, XVA"
+
+fields:
+  collateral:
+    type: dict
+    grid: "12"
+    group: collateral
+    description: "Collateral and margin management"
+    items:
+      # ── CSA / ISDA ──
+      csa_id:             { type: str, grid: "3", description: "Credit Support Annex ID" }
+      isda_id:            { type: str, grid: "3", description: "ISDA Master Agreement ID" }
+      isda_type:          { type: str, grid: "3", enum: [ISDA_1992, ISDA_2002], description: "ISDA version" }
+      governing_law:      { type: str, grid: "3", enum: [ENGLISH, NEW_YORK], description: "Governing law" }
+      base_ccy:           { type: str, grid: "2", description: "CSA base currency" }
+
+      # ── Thresholds ──
+      threshold:          { type: float, grid: "3", description: "Credit threshold amount" }
+      mta:                { type: float, grid: "3", description: "Minimum Transfer Amount" }
+      rounding:           { type: float, grid: "3", description: "Rounding increment" }
+      eligible_collateral: { type: list, grid: "12", description: "Eligible types: CASH, GOVT, CORP, EQUITY" }
+      eligible_ccy:       { type: list, grid: "12", description: "Eligible currencies" }
+
+      # ── Margin ──
+      initial_margin:     { type: float, grid: "3", description: "IM amount" }
+      variation_margin:   { type: float, grid: "3", description: "VM amount" }
+      margin_model:       { type: str, grid: "3", enum: [SIMM, SPAN, GRID, SCHEDULE, VAR], description: "Margin calculation model" }
+      margin_freq:        { type: str, grid: "3", enum: [DAILY, WEEKLY, MONTHLY], description: "Margin call frequency" }
+      posted:             { type: float, grid: "3", description: "Collateral posted by us" }
+      received:           { type: float, grid: "3", description: "Collateral received from cpty" }
+      net_exposure:       { type: float, grid: "3", description: "Net exposure after collateral" }
+      excess_deficit:     { type: float, grid: "3", description: "Collateral surplus / shortfall" }
+      interest_on_cash:   { type: float, grid: "3", description: "Rate paid on posted cash" }
+
+      # ── Rehypothecation ──
+      rehypo:
+        type: dict
+        grid: "12"
+        collapsed: true
+        items:
+          allowed:          { type: bool, grid: "2", description: "Rehypothecation permitted" }
+          limit_pct:        { type: float, grid: "3", description: "Max % reusable" }
+          amount:           { type: float, grid: "3", description: "Currently rehypothecated" }
+          reinvest_rate:    { type: float, grid: "3", description: "Cash reinvestment return" }
+
+      # ── XVA ──
+      xva:
+        type: dict
+        grid: "12"
+        collapsed: true
+        description: "Valuation adjustments"
+        items:
+          cva:              { type: float, grid: "3", description: "Credit Valuation Adjustment" }
+          dva:              { type: float, grid: "3", description: "Debit Valuation Adjustment" }
+          fva:              { type: float, grid: "3", description: "Funding Valuation Adjustment" }
+          mva:              { type: float, grid: "3", description: "Margin Valuation Adjustment" }
+          kva:              { type: float, grid: "3", description: "Capital Valuation Adjustment" }
+          pfe:              { type: float, grid: "3", description: "Potential Future Exposure" }
+          expected_exposure: { type: float, grid: "3", description: "Expected Exposure (EE)" }
+          sa_ccr:           { type: float, grid: "3", description: "SA-CCR exposure amount" }
+          mpor:             { type: int, grid: "3", description: "Margin Period of Risk (business days)" }

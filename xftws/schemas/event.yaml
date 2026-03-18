@@ -1,0 +1,304 @@
+# =============================================================================
+# EVENT - Unified event record for all fixed income business actions
+# =============================================================================
+# The ONE schema. event_type drives the nested payload{} structure.
+# Three-layer model: raw{} (source-native) → payload{} (canonical) → enriched{} (post-match)
+# =============================================================================
+blueprint: schema
+kind: Event
+qualifier: "ftv-"
+xid: event_id|event_type
+xns: [id, xid]
+description: "Universal event record — all business actions flow through here"
+icon: zap
+extends: _system.yaml
+operation: MERGE
+
+# Row-level security: sales/trading users see own events only (operations/admin bypass RLS)
+rls:
+  read:
+    - field: actor
+      match: $ctx.identity
+
+sections:
+  - name: identity
+    label: "Event"
+    icon: zap
+  - name: source
+    label: "Source"
+    icon: radio
+    collapsible: true
+  - name: raw
+    label: "Raw Message"
+    icon: file
+    collapsible: true
+    default_open: false
+  - name: payload
+    label: "Payload"
+    icon: package
+    collapsible: true
+  - name: enriched
+    label: "Enriched"
+    icon: layers
+    collapsible: true
+    default_open: false
+  - name: economics
+    label: "Economics"
+    icon: dollar-sign
+    collapsible: true
+  - name: linking
+    label: "Links & Correlation"
+    icon: link
+    collapsible: true
+  - name: lifecycle
+    label: "Lifecycle"
+    icon: clock
+    collapsible: true
+    default_open: false
+  - name: system
+    label: "System"
+    icon: settings
+    collapsible: true
+    default_open: false
+
+views:
+  - type: table
+    label: "Event Log"
+    icon: table
+    default: true
+  - type: card
+    label: "Event Cards"
+    icon: layout-grid
+    title: event_id
+    subtitle: event_type
+    badge: status
+  - type: kanban
+    label: "By Status"
+    icon: columns
+    group_by: status
+    title: event_id
+    subtitle: event_type
+  - type: bar
+    label: "By Type"
+    icon: bar-chart
+    x: event_type
+    y: $count
+  - type: pie
+    label: "By Source"
+    icon: pie-chart
+    x: source
+    y: $count
+
+model:
+  fields:
+    # ── Identity ──
+    event_id:      { type: str, required: true, key: true, rank: hero, fuzzy: true, grid: "3", group: identity, card: title, col: "2<", placeholder: "EVT-001" }
+    event_type:    { type: str, required: true, facet: true, grid: "3", rank: hero, group: identity, card: subtitle, widget: select, enum: $enums.ENUM_EVENT_TYPE, col: "1<" }
+    status:        { type: str, facet: true, grid: "3", rank: primary, group: identity, card: badge, widget: select, enum: $enums.ENUM_EVENT_STATUS, col: 3, default: ACTIVE }
+    version:       { type: int, grid: "3", group: identity, default: 1 }
+
+    # ── Source ──
+    source:        { type: str, facet: true, grid: "3", group: source, widget: select, enum: $enums.ENUM_SOURCE_TYPE, col: 4, description: "Originating system" }
+    source_ref:    { type: str, grid: "3", group: source, placeholder: "MW-20260308-12345", description: "External reference ID from source system" }
+    protocol:      { type: str, facet: true, grid: "3", group: source, widget: select, enum: $enums.ENUM_PROTOCOL, description: "Wire protocol (FIX, FpML, SWIFT, REST, INTERNAL)" }
+    actor:         { type: str, grid: "3", group: source, placeholder: "J. Smith", description: "Who created this event (user, system, service)" }
+    desk:          { type: str, facet: true, grid: "3", group: source, placeholder: "FX Spot NY", description: "Trading desk / function" }
+    thread_id:     { type: str, grid: "3", group: source, placeholder: "THR-A1B2C3D4E5F6", description: "Originating chat thread ID (BBG IB, Symphony)" }
+
+    # ══════════════════════════════════════════════════════════════
+    # THREE-LAYER PAYLOAD MODEL
+    # ══════════════════════════════════════════════════════════════
+    #
+    # Layer 1: raw{}      — source-native message, immutable after capture
+    # Layer 2: payload{}  — canonical transform, what the matching engine reads
+    # Layer 3: enriched{} — post-match additions (risk, regulatory, settlement)
+    #
+    # Flow: source → raw{} → transformer → payload{} → engine → enriched{}
+    # ══════════════════════════════════════════════════════════════
+
+    # ── Layer 1: Raw (source-native, immutable) ──
+    raw:
+      type: dict
+      grid: "12"
+      group: raw
+      collapsed: true
+      description: "Original message as received — never mutated after capture"
+      items:
+        format:        { type: str, grid: "3", widget: select, enum: $enums.ENUM_RAW_FORMAT, description: "FIX, FPML, SWIFT_MT, SWIFT_MX, JSON, CSV, INTERNAL" }
+        version:       { type: str, grid: "3", placeholder: "4.4", description: "Protocol version (e.g., FIX 4.4, FpML 5.12, MT300)" }
+        content:       { type: dict, grid: "12", collapsed: true, description: "Parsed source-native payload (or string for unparseable)" }
+        raw_text:      { type: str, grid: "12", widget: textarea, description: "Original wire text (FIX tags, XML, SWIFT block)" }
+        received_at:   { type: str, grid: "3", widget: datetime }
+        checksum:      { type: str, grid: "3", description: "SHA-256 of raw_text for tamper detection" }
+        source_msg_id: { type: str, grid: "3", placeholder: "MW-20260308-12345", description: "Message ID from source system" }
+
+    # ── Layer 2: Payload (canonical transform) ──
+    # Structure determined by event_type — see _event_payloads/*.yaml
+    payload:
+      type: dict
+      required: true
+      grid: "12"
+      group: payload
+      description: "Canonical event-type-specific data — matching engine reads ONLY this"
+
+    # ── Layer 3: Enriched (post-match additions) ──
+    enriched:
+      type: dict
+      grid: "12"
+      group: enriched
+      collapsed: true
+      description: "Post-processing additions — never present at capture time"
+      items:
+        risk_flags:     { type: list, grid: "12", widget: tags, description: "Risk alerts (LARGE_NOTIONAL, CONCENTRATION, etc.)" }
+        regulatory:
+          type: dict
+          grid: "6"
+          description: "Regulatory identifiers and reporting"
+          items:
+            uti:               { type: str, grid: "6", placeholder: "UTI202603081234..." }
+            usi:               { type: str, grid: "6", placeholder: "USI202603081234..." }
+            lei:               { type: str, grid: "12", placeholder: "529900T8BM49AURSDO55" }
+            jurisdiction:      { type: list, grid: "6", widget: tags }
+            reporting_status:  { type: str, grid: "3", widget: select, enum: $enums.ENUM_REPORTING_STATUS }
+            reported_at:       { type: str, grid: "3", widget: datetime }
+        settlement:
+          type: dict
+          grid: "6"
+          description: "Settlement instructions and status"
+          items:
+            ssi_id:            { type: str, grid: "3", placeholder: "SSI-USD-JPMC-001" }
+            nostro:            { type: str, grid: "3", placeholder: "JPMC-NY" }
+            value_date:        { type: str, grid: "3", widget: datepicker }
+            settlement_status: { type: str, grid: "3", widget: select, enum: $enums.ENUM_SETTLEMENT_STATUS }
+        pricing:
+          type: dict
+          grid: "6"
+          description: "Mid-market pricing and markup"
+          items:
+            mid_price:   { type: float, grid: "3" }
+            spread:      { type: float, grid: "3" }
+            markup_bps:  { type: float, grid: "3" }
+            benchmark:   { type: str, grid: "3", placeholder: "WMR 4PM Fix" }
+        compliance:
+          type: dict
+          grid: "6"
+          description: "Compliance checks and approvals"
+          items:
+            approved_by:     { type: str, grid: "3" }
+            limit_check:     { type: str, grid: "3" }
+            wash_trade_flag: { type: bool, grid: "3" }
+            best_execution:  { type: str, grid: "3" }
+        enriched_at:    { type: str, grid: "3", widget: datetime }
+        enriched_by:    { type: str, grid: "3", description: "Service/user that added enrichment" }
+
+    # ── Economics (denormalized for blotter display) ──
+    # Core fields populated by _make_event:
+    product_type:      { type: str, facet: true, grid: "3", group: economics, widget: select, enum: $enums.ENUM_PRODUCT_TYPE }
+    notional:          { type: float, grid: "3", group: economics }
+    ccy:               { type: str, grid: "3", group: economics, widget: select, enum: $enums.ENUM_CCY }
+    cpty_id:           { type: str, grid: "3", group: economics, widget: autocomplete, ref: entities.name }
+    # Convenience fields extracted from payload by factory (_denormalize_economics):
+    direction:         { type: str, grid: "3", group: economics, description: "PAY/RECEIVE/BUY/SELL — extracted from payload" }
+    ccy_pair:          { type: str, grid: "3", group: economics, description: "Currency pair (e.g. USDJPY) — FX products" }
+    rate:              { type: float, grid: "3", group: economics, description: "Principal rate/price from fixed leg or trade economics" }
+    tenor:             { type: str, grid: "3", group: economics, description: "Computed tenor (e.g. 5Y, 3M) from leg dates" }
+    index:             { type: str, grid: "3", group: economics, description: "Float rate index (e.g. SOFR, EURIBOR)" }
+    spread_bps:        { type: float, grid: "3", group: economics, description: "Spread in basis points (float leg or CDS premium)" }
+    reference_entity:  { type: str, grid: "3", group: economics, description: "CDS reference entity name" }
+    issuer:            { type: str, grid: "3", group: economics, description: "Bond issuer" }
+    security_desc:     { type: str, grid: "3", group: economics, description: "Security description (bonds, auctions)" }
+    option_type:       { type: str, grid: "3", group: economics, description: "Option type (RECEIVER/PAYER/CALL/PUT)" }
+
+    # ── Linking ──
+    links:
+      type: list
+      grid: "12"
+      group: linking
+      widget: table
+      description: "References to related events"
+      items:
+        type: dict
+        items:
+          event_id:   { type: str, grid: "4", placeholder: "EVT-003", description: "Linked event ID" }
+          rel:        { type: str, grid: "4", widget: select, enum: $enums.ENUM_LINK_TYPE, description: "Relationship type" }
+          role:       { type: str, grid: "4", description: "Role in the relationship (LHS, RHS, PARENT, CHILD)" }
+
+    # ── Correlation / Matching ──
+    correlation:
+      type: dict
+      grid: "12"
+      group: linking
+      description: "Matching engine metadata (populated when events get correlated)"
+      items:
+        chain_id:     { type: str, grid: "3", description: "Shared UUID linking all events in a scenario chain" }
+        match_type:   { type: str, grid: "3", widget: select, enum: $enums.ENUM_MATCH_TYPE }
+        scenario:     { type: str, grid: "3", widget: select, enum: $enums.ENUM_MATCH_SCENARIO }
+        match_status: { type: str, grid: "3", widget: select, enum: $enums.ENUM_MATCH_STATUS }
+        cardinality:  { type: str, grid: "3", widget: select, enum: $enums.ENUM_CARDINALITY }
+        direction:    { type: str, grid: "3", widget: select, enum: $enums.ENUM_MATCH_DIRECTION }
+        actor_role:   { type: str, grid: "3", widget: select, enum: $enums.ENUM_ACTOR_ROLE, description: "Functional role of the actor who produced this event" }
+        breaks:
+          type: list
+          grid: "12"
+          description: "Field-level breaks"
+          items:
+            type: dict
+            items:
+              field:     { type: str, grid: "3" }
+              lhs:       { type: str, grid: "3" }
+              rhs:       { type: str, grid: "3" }
+              tolerance: { type: str, grid: "3" }
+        resolution:
+          type: dict
+          grid: "12"
+          description: "Resolution action taken"
+          items:
+            action:      { type: str, grid: "3" }
+            service:     { type: str, grid: "3" }
+            params:      { type: dict, grid: "3" }
+            executed_at: { type: str, grid: "3", widget: datetime }
+        matched_at:   { type: str, grid: "3", widget: datetime }
+        matched_by:   { type: str, grid: "3" }
+
+    # ── Lifecycle Trail ──
+    transitions:
+      type: list
+      grid: "12"
+      group: lifecycle
+      widget: table
+      description: "Append-only log of every state change"
+      items:
+        type: dict
+        items:
+          from_status:  { type: str, grid: "2" }
+          to_status:    { type: str, grid: "2" }
+          at:           { type: str, grid: "3", widget: datetime }
+          by:           { type: str, grid: "2" }
+          reason:       { type: str, grid: "3" }
+          diff:         { type: dict, grid: "12", collapsed: true, description: "Fields that changed in this transition" }
+
+    # ── Timestamps ──
+    created_at:    { type: str, grid: "3", group: system, widget: datetime }
+    updated_at:    { type: str, grid: "3", group: system, widget: datetime }
+    sla_deadline:  { type: str, grid: "3", group: system, widget: datetime }
+    priority:      { type: str, grid: "3", group: system, widget: select, enum: $enums.ENUM_PRIORITY }
+
+# =============================================================================
+# CHAIN WORKFLOW — RFQ negotiation state machine
+# =============================================================================
+# Event-driven chain workflow. States are UPPERCASE, config is lowercase.
+# Each transition is triggered by an event_type arriving with matching guard.
+# The chain progresses through states, creating links and updating match_status.
+# Compiled spec is hardcoded in apps/xftws/src/domain/rfq/chainMachine.ts
+#
+#   field: chain_state
+#   IDLE:        → OPEN        on RFQ   (UNMATCHED)
+#   OPEN:        → QUOTED      on QUOTE guard payload.status=INDICATIVE (PARTIAL)
+#   QUOTED:      → NEGOTIATING on RFQ   guard payload.negotiation_status=REVISED (PARTIAL)
+#                → TRADED_AWAY on RFQ   guard payload.negotiation_status=TRADED_AWAY (UNMATCHED)
+#   NEGOTIATING: → QUOTED_FIRM on QUOTE guard payload.status=FIRM (PARTIAL)
+#   QUOTED_FIRM: → ACCEPTED    on RFQ   guard payload.negotiation_status=ACCEPTED (MATCHED)
+#                → TRADED_AWAY on RFQ   guard payload.negotiation_status=TRADED_AWAY (UNMATCHED)
+#   ACCEPTED:    → TRADED      on TRADE (MATCHED)
+#   scenarios: HIT → [IDLE..TRADED], MISS → [IDLE..TRADED_AWAY]
+# =============================================================================

@@ -1,0 +1,31 @@
+# =============================================================================
+# ORDER Payload — Order with Fills
+# =============================================================================
+# event_type: ORDER
+# Flow: Execution order sent to broker/venue, receives fill(s)
+# =============================================================================
+blueprint: partial
+description: "Order payload with fill tracking — execution via broker or venue"
+
+fields:
+  order_type:        { type: str, required: true, enum: [LIMIT, MARKET, IOI], description: "Order type" }
+  direction:         { type: str, required: true, enum: $enums.ENUM_DIRECTION }
+  product_type:      { type: str, required: true, enum: $enums.ENUM_PRODUCT_TYPE }
+  notional:          { type: float, required: true }
+  ccy:               { type: str, required: true, enum: $enums.ENUM_CCY }
+  ccy_pair:          { type: str, description: "Currency pair for FX" }
+  limit_price:       { type: float, description: "Limit price (for LIMIT orders)" }
+  broker_entity_id:  { type: str, ref: entities.name }
+  fills:
+    type: list
+    description: "Execution fills received"
+    items:
+      type: dict
+      items:
+        qty:    { type: float }
+        price:  { type: float }
+        venue:  { type: str }
+        at:     { type: str, widget: datetime }
+  vwap:              { type: float, description: "Volume-weighted average price across fills" }
+  filled_qty:        { type: float, description: "Total filled quantity" }
+  remaining_qty:     { type: float, description: "Unfilled quantity" }

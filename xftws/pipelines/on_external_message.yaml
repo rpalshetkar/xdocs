@@ -1,0 +1,67 @@
+# =============================================================================
+# FLOW: on_external_message
+# =============================================================================
+# Trigger: External event saved (BROKER_FILL, CLEARING_MSG, AFFIRM_MSG, GIVEUP_NOTICE)
+# Action: Transform raw → payload, reconcile against existing trade, update status
+# Primitive: RECONCILIATION (diff-based)
+# Scenarios: BROKER_EXEC, CLEARING, CPTY_AFFIRM, GIVEUP, TRADE_CONFIRM
+# =============================================================================
+
+flow: on_external_message
+mode: inline
+on_error: dlq
+category: matching
+description: Reconcile external messages against booked trades
+
+source:
+  type: repo
+  repo: events
+  filter: "event_type IN ('BROKER_FILL', 'CLEARING_MSG', 'AFFIRM_MSG', 'GIVEUP_NOTICE')"
+
+steps:
+  - name: transform_raw_to_payload
+    description: Apply source-specific transformer (raw.content → payload)
+    transform:
+      transformer_key: "$xu.transformer_key($.source, $.protocol, $.event_type, $.product_type)"
+      payload: "$xu.apply_transformer($.transformer_key, $.raw.content)"
+
+  - name: find_matching_trade
+    description: Locate the TRADE or BOOKING event this message relates to
+    transform:
+      trade_query:
+        product_type: "$.product_type"
+        cpty_id: "$.cpty_id"
+        status: ["CONFIRMED", "MATCHED"]
+        event_type: ["TRADE", "TRADING_BOOKING", "SALES_BOOKING"]
+
+  - name: reconcile
+    engine: reconciliation
+    config:
+      key_fields: [cpty_id, product_type]
+      tolerance_fields:
+        payload.notional: 0.01
+        payload.rate: 0.0001
+        payload.premium: 0.01
+      equivalence_rules:
+        payload.direction:
+          - [PAY, RECEIVE]
+      compare_fields: [payload.notional, payload.rate, payload.currency, payload.trade_date, payload.value_date]
+
+  - name: apply_result
+    transform:
+      correlation:
+        match_type: RECONCILIATION
+        scenario: "$xu.classify_recon_scenario($.event_type)"
+        match_status: "$.reconciliation.match_status"
+        breaks: "$.reconciliation.breaks"
+        matched_at: "$now"
+      links:
+        - event_id: "$.matched_trade.event_id"
+          rel: CORRELATES_WITH
+
+sinks:
+  - type: event
+    channel: xds:xftws:recon_result
+  - type: websocket
+    channel: xds:xftws:recon_result
+    event_type: recon_result

@@ -1,0 +1,58 @@
+# =============================================================================
+# TRADE Payload — Materialized Trade Record
+# =============================================================================
+# event_type: TRADE
+# Flow: Created by matching engine when booking events converge
+# This is the "golden record" — denormalized from correlated events
+# =============================================================================
+blueprint: partial
+description: "Materialized trade — created by engine from correlated booking events"
+
+fields:
+  trade_id:      { type: str, required: true, description: "Unique trade identifier (TRD-FX-001)" }
+  fpml_type:     { type: str, required: true, description: "Product template (FPML-FX-SPOT, FPML-IRS)" }
+  trade_date:    { type: str, required: true, widget: datepicker }
+
+  parties:
+    type: list
+    required: true
+    description: "Trade parties with roles"
+    items:
+      type: dict
+      items:
+        role:       { type: str }
+        entity_id:  { type: str, ref: entities.name }
+        trader:     { type: str }
+        sales:      { type: str }
+
+  ned:
+    type: dict
+    description: "Non-economic details"
+    items:
+      book_id:    { type: str, ref: books.name }
+      portfolio:  { type: str }
+      strategy:   { type: str }
+      clearing:   { type: str }
+
+  legs:
+    type: list
+    required: true
+    description: "Trade leg economics"
+    items:
+      type: dict
+      items:
+        leg_id:      { type: str }
+        leg_type:    { type: str, enum: $enums.ENUM_LEG_TYPE }
+        direction:   { type: str, enum: $enums.ENUM_DIRECTION }
+        notional:    { type: float }
+        ccy:         { type: str, enum: $enums.ENUM_CCY }
+        rate:        { type: float }
+        start_date:  { type: str, widget: datepicker }
+        end_date:    { type: str, widget: datepicker }
+        day_count:   { type: str }
+        index:       { type: str }
+        spread_bps:  { type: float }
+        fixing_freq: { type: str }
+
+  uti:   { type: str, description: "Unique Transaction Identifier" }
+  usi:   { type: str, description: "Unique Swap Identifier" }

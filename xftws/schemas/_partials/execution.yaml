@@ -1,0 +1,69 @@
+# =============================================================================
+# EXECUTION — How/where/when a trade was executed
+# =============================================================================
+
+blueprint: partial
+description: "Trade execution — venue, algo, fills, best execution metrics"
+
+fields:
+  execution:
+    type: dict
+    grid: "12"
+    group: execution
+    description: "Execution metadata"
+    items:
+      # ── Venue & Method ──
+      venue:            { type: str, grid: "3", description: "Execution venue (FXGO, TRADEWEB, TSOX, EMSX)" }
+      venue_mic:        { type: str, grid: "3", description: "Venue MIC code (ISO 10383)" }
+      venue_trade_id:   { type: str, grid: "3", description: "Venue-assigned trade reference" }
+      exec_type:        { type: str, grid: "3", enum: [VOICE, ELECTRONIC, RFQ, AUCTION, ALGO, INTERNAL_CROSS, STREAMING, CLICK_TO_TRADE, CLOB], description: "Execution method" }
+      exec_broker:      { type: str, grid: "3", description: "Executing broker" }
+      capacity:         { type: str, grid: "3", enum: [PRINCIPAL, AGENT, RISKLESS_PRINCIPAL, MIXED], description: "Broker capacity" }
+      exec_timestamp:   { type: str, grid: "4", description: "Execution timestamp (microsecond precision)" }
+
+      # ── Algo Execution ──
+      algo:
+        type: dict
+        grid: "12"
+        collapsed: true
+        description: "Algorithm execution parameters (if algo-executed)"
+        items:
+          name:             { type: str, grid: "3", enum: [VWAP, TWAP, IS, POV, ICEBERG, SNIPER, DARK, DMA, LIQUIDITY_SEEKING], description: "Algo strategy" }
+          provider:         { type: str, grid: "3", description: "Algo provider (bank/broker)" }
+          start_time:       { type: str, grid: "3", description: "Algo start time" }
+          end_time:         { type: str, grid: "3", description: "Algo end time" }
+          urgency:          { type: str, grid: "3", enum: [LOW, MEDIUM, HIGH, CRITICAL], description: "Execution urgency" }
+          participation_rate: { type: float, grid: "3", description: "Target % of market volume" }
+          limit_price:      { type: float, grid: "3", description: "Price limit" }
+          benchmark:        { type: str, grid: "3", enum: [ARRIVAL, TWAP, VWAP, CLOSE, FIXING, MID], description: "Benchmark" }
+
+      # ── Fills ──
+      fills:
+        type: list
+        grid: "12"
+        collapsed: true
+        description: "Individual fills for multi-fill execution"
+        items:
+          type: dict
+          items:
+            fill_id:        { type: str, grid: "2", description: "Fill identifier" }
+            quantity:        { type: float, grid: "3", description: "Fill quantity" }
+            price:           { type: float, grid: "3", description: "Fill price" }
+            timestamp:       { type: str, grid: "3", description: "Fill timestamp" }
+            venue:           { type: str, grid: "3", description: "Fill venue" }
+            liquidity:       { type: str, grid: "2", enum: [ADDED, REMOVED, ROUTED, AUCTION], description: "Liquidity indicator" }
+
+      # ── Best Execution / TCA ──
+      tca:
+        type: dict
+        grid: "12"
+        collapsed: true
+        description: "Transaction cost analysis metrics"
+        items:
+          arrival_price:    { type: float, grid: "3", description: "Decision/arrival price" }
+          impl_shortfall:   { type: float, grid: "3", description: "Implementation shortfall (bps)" }
+          market_impact:    { type: float, grid: "3", description: "Estimated market impact (bps)" }
+          timing_cost:      { type: float, grid: "3", description: "Market drift cost (bps)" }
+          spread_cost:      { type: float, grid: "3", description: "Bid-ask spread cost (bps)" }
+          fill_rate:        { type: float, grid: "3", description: "% of order filled" }
+          dark_pct:         { type: float, grid: "3", description: "% executed in dark venues" }

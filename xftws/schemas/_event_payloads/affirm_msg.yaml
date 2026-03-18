@@ -1,0 +1,26 @@
+# =============================================================================
+# AFFIRM_MSG Payload — Trade Affirmation
+# =============================================================================
+# event_type: AFFIRM_MSG
+# Flow: MarkitWire/DTCC sends affirmation confirming trade economics
+# =============================================================================
+blueprint: partial
+description: "Affirmation payload — external platform confirms trade terms"
+
+fields:
+  platform:          { type: str, required: true, description: "MARKITWIRE, DTCC, etc." }
+  affirm_id:         { type: str, required: true, description: "Platform affirmation reference" }
+  cpty_entity_id:    { type: str, required: true, ref: entities.name }
+  affirmed_economics:
+    type: dict
+    required: true
+    description: "Economics as affirmed by counterparty"
+    items:
+      product_type:  { type: str, enum: $enums.ENUM_PRODUCT_TYPE }
+      direction:     { type: str, enum: $enums.ENUM_DIRECTION }
+      ccy_pair:      { type: str }
+      notional:      { type: float }
+      ccy:           { type: str, enum: $enums.ENUM_CCY }
+      rate:          { type: float }
+      value_date:    { type: str, widget: datepicker }
+      far_leg:       { type: dict, description: "Far leg for FX swaps/forwards" }

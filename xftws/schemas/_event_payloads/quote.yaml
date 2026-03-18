@@ -1,0 +1,41 @@
+# =============================================================================
+# QUOTE Payload — Quote Response
+# =============================================================================
+# event_type: QUOTE
+# Flow: Dealer responds to RFQ with price
+# =============================================================================
+blueprint: partial
+description: "Quote response payload — price offered in response to RFQ"
+
+fields:
+  rfq_event_id:  { type: str, required: true, description: "Event ID of the originating RFQ" }
+  price:         { type: float, required: true, description: "Quoted price/rate" }
+  spread:        { type: float, description: "Spread over mid/benchmark" }
+  valid_until:   { type: str, widget: datetime, description: "Quote validity window" }
+  quoted_by:     { type: str, description: "Trader/desk that quoted" }
+  status:        { type: str, enum: [PENDING, INDICATIVE, FIRM, ACCEPTED, REJECTED, EXPIRED, TRADED_AWAY], default: PENDING }
+  # Competitive RFQ fields (populated when rfq_mode=COMPETITIVE)
+  dealer_entity_id: { type: str, ref: entities.name, description: "Quoting dealer entity (for competitive RFQ)" }
+  dealer_rank:      { type: int, description: "Rank among competing quotes (1=best)" }
+  is_winner:        { type: bool, description: "True if selected in competitive RFQ" }
+
+  # Two-way pricing (market-making / streaming)
+  bid_price:          { type: float, description: "Bid price/rate (dealer buys at)" }
+  ask_price:          { type: float, description: "Ask price/rate (dealer sells at)" }
+  mid_price:          { type: float, description: "Mid-market reference" }
+  bid_spread:         { type: float, description: "Bid spread in bps over benchmark" }
+  ask_spread:         { type: float, description: "Ask spread in bps over benchmark" }
+  bid_size:           { type: float, description: "Size available on bid" }
+  ask_size:           { type: float, description: "Size available on ask" }
+
+  # Spread product response
+  benchmark:          { type: str, description: "Benchmark reference used for pricing" }
+  benchmark_rate:     { type: float, description: "Current benchmark rate (if available)" }
+  fixing_status:      { type: str, enum: $enums.ENUM_FIXING_STATUS, description: "Whether benchmark has fixed" }
+  all_in_rate:        { type: float, description: "Benchmark + spread = execution rate" }
+
+  # Quote mode
+  quote_mode:         { type: str, enum: $enums.ENUM_QUOTE_MODE, default: ONE_WAY, description: "Pricing mode" }
+  stream_id:          { type: str, description: "Streaming session ID (for STREAM mode, links updates)" }
+  venue:              { type: str, enum: $enums.ENUM_VENUE, description: "Venue this quote was received from" }
+  venue_quote_id:     { type: str, description: "Venue-assigned quote identifier" }

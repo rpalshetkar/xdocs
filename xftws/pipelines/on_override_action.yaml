@@ -1,0 +1,74 @@
+# =============================================================================
+# FLOW: on_override_action
+# =============================================================================
+# Trigger: Manual force-match or dispute resolution action
+# Action: Apply override with full audit trail, bypass normal matching rules
+# Primitive: OVERRIDE (force)
+# Scenarios: FORCE_MATCH, DISPUTE
+# =============================================================================
+
+flow: on_override_action
+mode: inline
+on_error: fail
+category: matching
+description: Process manual override actions (force match, dispute resolution)
+
+source:
+  type: manual
+
+steps:
+  - name: validate_authority
+    description: Verify user has override permissions (operations or admin role)
+    transform:
+      action: "$.data.action"
+      user: "$.data.user"
+      role: "$.data.role"
+      reason: "$.data.reason"
+      lhs_event_id: "$.data.lhs_event_id"
+      rhs_event_id: "$.data.rhs_event_id"
+    filter: "$.role IN ('operations', 'admin')"
+
+  - name: load_events
+    transform:
+      lhs: "$xu.load_event($.lhs_event_id)"
+      rhs: "$xu.load_event($.rhs_event_id)"
+
+  - name: apply_override
+    filter: "$.action == 'FORCE_MATCH'"
+    transform:
+      lhs_update:
+        correlation:
+          match_type: OVERRIDE
+          scenario: FORCE_MATCH
+          match_status: FORCED
+          matched_at: "$now"
+          matched_by: "$.user"
+          resolution: "$.reason"
+        status: FORCED
+        links:
+          - event_id: "$.rhs_event_id"
+            rel: CORRELATES_WITH
+            role: RHS
+
+  - name: resolve_dispute
+    filter: "$.action == 'RESOLVE_DISPUTE'"
+    transform:
+      lhs_update:
+        correlation:
+          match_type: OVERRIDE
+          scenario: DISPUTE
+          match_status: RESOLVED
+          matched_at: "$now"
+          matched_by: "$.user"
+          resolution: "$.reason"
+        status: RESOLVED
+
+sinks:
+  - type: repo
+    repo: events
+    mode: save
+  - type: event
+    channel: xds:xftws:override_result
+  - type: websocket
+    channel: xds:xftws:override_result
+    event_type: override_result

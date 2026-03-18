@@ -1,0 +1,100 @@
+# =============================================================================
+# ECONOMICS — Universal trade economics with uniform leg structure
+# =============================================================================
+# Usage: Embedded as economics{} in trade events. The legs[] list handles
+#        all multi-leg products uniformly: IRS (fixed/float), FX swaps
+#        (near/far), option strategies (N-leg). Single-leg trades use legs[0].
+# =============================================================================
+
+blueprint: partial
+description: "Trade economics — direction, notional, ccy, fees, and uniform legs[]"
+
+fields:
+  economics:
+    type: dict
+    grid: "12"
+    group: economics
+    description: "Trade economics — universal fields shared by all products"
+    items:
+      # ── Core Terms ──
+      direction:      { type: str, grid: "3", enum: [BUY, SELL, PAY, RECEIVE], description: "Trade direction" }
+      notional:       { type: float, grid: "3", description: "Face value / principal amount", bbg: [AMT_OUTSTANDING] }
+      ccy:            { type: str, grid: "2", enum: $enums.ENUM_CCY, description: "Primary currency (ISO 4217)" }
+      price:          { type: float, grid: "3", description: "Execution price (clean for bonds)" }
+      yield_val:      { type: float, grid: "3", description: "Execution yield (fixed income)" }
+      spread_bps:     { type: float, grid: "3", description: "Spread to benchmark in basis points" }
+      quantity:       { type: float, grid: "3", description: "Number of units/shares/contracts" }
+      trade_date:     { type: date, grid: "3", description: "Date trade was agreed" }
+      settle_date:    { type: date, grid: "3", description: "Contractual settlement date" }
+
+      # ── Computed Amounts ──
+      gross_amount:   { type: float, grid: "3", description: "notional × price (or equivalent)" }
+      net_amount:     { type: float, grid: "3", description: "gross +/- accrued +/- fees" }
+      accrued:        { type: float, grid: "3", description: "Accrued interest at settlement (fixed income)" }
+
+      # ── Fees ──
+      fees:
+        type: list
+        grid: "12"
+        collapsed: true
+        description: "All fees/costs associated with the trade"
+        items:
+          type: dict
+          items:
+            fee_type:   { type: str, grid: "3", enum: [COMMISSION, BROKERAGE, CLEARING, EXCHANGE, STAMP_DUTY, SEC_FEE, TAF, MARKUP, MARKDOWN, CONCESSION, SETTLEMENT, CUSTODIAN, RESEARCH, SOFT_DOLLAR], description: "Fee category" }
+            amount:     { type: float, grid: "3", description: "Fee amount" }
+            ccy:        { type: str, grid: "2", description: "Fee currency" }
+            rate_bps:   { type: float, grid: "2", description: "Fee as basis points on notional" }
+            capacity:   { type: str, grid: "2", enum: [PRINCIPAL, AGENT, RISKLESS_PRINCIPAL], description: "Broker capacity for this fee" }
+
+      # ── Legs (uniform structure for all multi-leg products) ──
+      legs:
+        type: list
+        grid: "12"
+        description: "Product-specific leg economics — IRS, FX swaps, strategies all use this"
+        items:
+          type: dict
+          items:
+            # ── Leg Identity ──
+            leg_id:         { type: str, grid: "2", description: "Leg identifier within trade (1, 2, NEAR, FAR)" }
+            leg_type:       { type: str, grid: "3", enum: [FIXED, FLOAT, SPOT, FORWARD, CALL, PUT, NEAR, FAR, PROTECTION_BUY, PROTECTION_SELL], description: "Leg type discriminator" }
+            direction:      { type: str, grid: "2", enum: [PAY, RECEIVE, BUY, SELL], description: "Leg direction" }
+
+            # ── Amounts ──
+            notional:       { type: float, grid: "3", description: "Leg notional" }
+            ccy:            { type: str, grid: "2", description: "Leg currency" }
+
+            # ── Rate / Price ──
+            rate:           { type: float, grid: "3", description: "Fixed rate, agreed FX rate, or strike price" }
+            index:          { type: str, grid: "3", description: "Float rate index (SOFR, EURIBOR, SONIA, ESTR)" }
+            spread_bps:     { type: float, grid: "2", description: "Spread over index in basis points" }
+
+            # ── Dates ──
+            start_date:     { type: date, grid: "3", description: "Leg effective/value date" }
+            end_date:       { type: date, grid: "3", description: "Leg maturity/settlement date" }
+
+            # ── Day Count & Frequency ──
+            day_count:      { type: str, grid: "3", enum: [ACT_360, ACT_365, ACT_ACT_ISDA, ACT_ACT_ICMA, "30_360", "30E_360"], description: "Day count convention" }
+            fixing_freq:    { type: str, grid: "2", enum: [DAILY, WEEKLY, MONTHLY, QUARTERLY, SEMI_ANNUAL, ANNUAL], description: "Rate reset frequency" }
+            payment_freq:   { type: str, grid: "2", enum: [MONTHLY, QUARTERLY, SEMI_ANNUAL, ANNUAL, AT_MATURITY], description: "Payment frequency" }
+            compounding:    { type: str, grid: "3", enum: [NONE, SIMPLE, COMPOUNDING, FLAT_COMPOUNDING, SPREAD_EXCLUSIVE], description: "Compounding method" }
+            roll_convention: { type: str, grid: "3", enum: [IMM, EOM, MODFOLLOWING, FOLLOWING, PRECEDING, UNADJUSTED], description: "Date roll convention" }
+
+            # ── RFR-Specific (SOFR, SONIA) ──
+            lookback_days:  { type: int, grid: "2", description: "RFR lookback period (2-5 business days)" }
+            lockout_days:   { type: int, grid: "2", description: "Rate frozen before period end" }
+            observation_shift: { type: bool, grid: "2", description: "Weights shift with observation dates" }
+
+            # ── FX-Specific ──
+            ccy_pair:       { type: str, grid: "3", description: "FX currency pair (e.g., EURUSD)" }
+            fwd_points:     { type: float, grid: "3", description: "Forward points" }
+
+            # ── Option-Specific ──
+            strike:         { type: float, grid: "3", description: "Option strike price" }
+            premium:        { type: float, grid: "3", description: "Option premium" }
+            premium_ccy:    { type: str, grid: "2", description: "Premium currency" }
+
+            # ── Amortization ──
+            # NOTE: Use _partials/schedules.yaml for amort schedules, not inline.
+            # Kept here as convenience shorthand; full schedule lives in schedules[].
+            amort_schedule: { type: list, grid: "12", collapsed: true, description: "Notional step schedule [{date, amount}] — prefer schedules[] partial" }

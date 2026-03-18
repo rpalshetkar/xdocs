@@ -1,0 +1,27 @@
+# =============================================================================
+# OVERLAY: IRS — Interest Rate Swap specific terms
+# =============================================================================
+# Note: The actual leg details live in economics.legs[] (from _partials/economics.yaml).
+# This overlay captures swap-level metadata not covered by the generic leg structure.
+# =============================================================================
+blueprint: partial
+description: "IRS overlay — swap-level metadata, clearing, amortization"
+
+fields:
+  swap_type:            { type: str, grid: "3", enum: [VANILLA, BASIS, OIS, CROSS_CURRENCY, AMORTIZING, INFLATION, TOTAL_RETURN], description: "Swap sub-type" }
+  # Clearing
+  clearing_status:      { type: str, grid: "3", enum: [CLEARED, UNCLEARED, PENDING, REJECTED], description: "Clearing status" }
+  ccp:                  { type: str, grid: "3", enum: [LCH_SWAPCLEAR, CME, JSCC, EUREX, ICE_CLEAR, SGX], description: "Central counterparty" }
+  clearing_member:      { type: str, grid: "3", description: "Clearing broker/member" }
+  client_clearing:      { type: str, grid: "3", enum: [INDIVIDUAL, OMNIBUS, LSOC, HOUSE], description: "Client clearing segregation type" }
+  # Cross-currency
+  fx_rate:              { type: float, grid: "3", description: "Initial FX rate (cross-ccy)" }
+  principal_exchange_initial: { type: bool, grid: "2", description: "Exchange principal at start" }
+  principal_exchange_final:   { type: bool, grid: "2", description: "Exchange principal at maturity" }
+  mtm_reset:            { type: bool, grid: "2", description: "MTM notional reset" }
+  # Swaption (if this is the underlying of a swaption)
+  swaption_exercise:    { type: str, grid: "3", enum: [EUROPEAN, BERMUDAN, AMERICAN], description: "Swaption exercise style" }
+  swaption_expiry:      { type: date, grid: "3", description: "Swaption expiration date" }
+  swaption_straddle:    { type: bool, grid: "2", description: "Buyer chooses pay/receive on exercise" }
+  # Compression
+  compression_eligible: { type: bool, grid: "2", description: "Eligible for multilateral compression" }

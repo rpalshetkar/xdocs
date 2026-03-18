@@ -1,0 +1,26 @@
+# =============================================================================
+# GIVEUP_NOTICE Payload — Give-Up/Take-Up Notice
+# =============================================================================
+# event_type: GIVEUP_NOTICE
+# Flow: Executing broker gives up trade to prime broker
+# =============================================================================
+blueprint: partial
+description: "Give-up notice — trade transfer from executing broker to PB"
+
+fields:
+  executing_broker:  { type: str, required: true, description: "Executing broker entity" }
+  prime_broker:      { type: str, required: true, description: "Prime broker receiving trade" }
+  giveup_ref:        { type: str, description: "Give-up reference number" }
+  trade_economics:
+    type: dict
+    required: true
+    description: "Trade terms being given up"
+    items:
+      product_type:  { type: str, enum: $enums.ENUM_PRODUCT_TYPE }
+      direction:     { type: str, enum: $enums.ENUM_DIRECTION }
+      notional:      { type: float }
+      ccy:           { type: str, enum: $enums.ENUM_CCY }
+      ccy_pair:      { type: str }
+      rate:          { type: float }
+      trade_date:    { type: str, widget: datepicker }
+      value_date:    { type: str, widget: datepicker }

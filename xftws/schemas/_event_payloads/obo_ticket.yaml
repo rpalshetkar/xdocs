@@ -1,0 +1,25 @@
+# =============================================================================
+# OBO_TICKET Payload — On-Behalf-Of Client Ticket
+# =============================================================================
+# event_type: OBO_TICKET
+# Flow: Client submits trade ticket through portal/API
+# =============================================================================
+blueprint: partial
+description: "On-behalf-of ticket — client-submitted trade instruction"
+
+fields:
+  client_entity_id:  { type: str, required: true, ref: entities.name }
+  on_behalf_of:      { type: str, required: true, description: "Client name or account" }
+  ticket_ref:        { type: str, description: "Client-side ticket reference" }
+  trade_economics:
+    type: dict
+    required: true
+    description: "Requested trade terms"
+    items:
+      product_type:  { type: str, required: true, enum: $enums.ENUM_PRODUCT_TYPE }
+      direction:     { type: str, enum: $enums.ENUM_DIRECTION }
+      notional:      { type: float, required: true }
+      ccy:           { type: str, required: true, enum: $enums.ENUM_CCY }
+      ccy_pair:      { type: str }
+      rate:          { type: float }
+      value_date:    { type: str, widget: datepicker }

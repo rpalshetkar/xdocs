@@ -1,0 +1,73 @@
+# =============================================================================
+# MKT — Market data observations
+# =============================================================================
+# Curves, prices, rate fixings, vol surfaces, spreads, indices.
+# No security_id FK — the axes themselves describe the structure
+# (curve name, tenor, strike, etc.). Uses the same 9-axis pattern
+# as event and measure.
+#
+# Examples:
+#   CURVE_POINT: tx="SOFR_3M", x=5 (tenor), ty="USD", dx=2026-03-18, value=0.0412
+#   VOL_SURFACE: tx="EURUSD_1M", x=1.08 (strike), ty="ATM", value=8.5
+#   RATE_FIX:    tx="SOFR", dx=2026-03-18, value=0.0532
+#   INDEX:       tx="SPX", dx=2026-03-18, value=5245.30
+# =============================================================================
+blueprint: schema
+kind: Mkt
+qualifier: "ftmk-"
+xid: mkt_id
+xns: [id, xid]
+description: "Market data observations — curves, prices, fixings, vol surfaces"
+icon: trending-up
+extends: _system.yaml
+operation: MERGE
+
+sections:
+  - name: identity
+    label: "Observation"
+    icon: trending-up
+  - name: axes
+    label: "Axes"
+    icon: grid
+    collapsible: true
+  - name: system
+    label: "System"
+    icon: settings
+    collapsible: true
+    default_open: false
+
+views:
+  - type: table
+    label: "Market Data Grid"
+    icon: table
+    default: true
+  - type: bar
+    label: "By Type"
+    icon: bar-chart
+    x: observation_type
+    y: $count
+
+model:
+  fields:
+    # ── Identity ──
+    mkt_id: { type: str, required: true, key: true, rank: hero, grid: "3", group: identity, col: "2<", placeholder: "FTMK-001" }
+    observation_type: { type: str, required: true, facet: true, grid: "3", rank: primary, group: identity, widget: select, enum: $enums.ENUM_OBSERVATION_TYPE }
+    as_of_date: { type: str, grid: "3", group: identity }
+    value: { type: float, required: true, grid: "3", group: identity }
+    ccy: { type: str, grid: "3", group: identity, widget: select, enum: $enums.ENUM_CCY }
+    source: { type: str, facet: true, grid: "3", group: identity, widget: select, enum: $enums.ENUM_SOURCE_TYPE }
+
+    # ── Numeric axes ──
+    x: { type: float, grid: "3", group: axes, description: "Numeric axis 1 (tenor, strike...)" }
+    y: { type: float, grid: "3", group: axes, description: "Numeric axis 2" }
+    z: { type: float, grid: "3", group: axes, description: "Numeric axis 3" }
+
+    # ── Text axes ──
+    tx: { type: str, grid: "3", group: axes, description: "Text axis 1 (curve name, benchmark...)" }
+    ty: { type: str, grid: "3", group: axes, description: "Text axis 2 (category, ccy_pair...)" }
+    tz: { type: str, grid: "3", group: axes, description: "Text axis 3" }
+
+    # ── Date axes ──
+    dx: { type: str, grid: "3", group: axes, description: "Date axis 1 (fixing date, observation date...)" }
+    dy: { type: str, grid: "3", group: axes, description: "Date axis 2" }
+    dz: { type: str, grid: "3", group: axes, description: "Date axis 3" }

@@ -1,0 +1,106 @@
+# =============================================================================
+# SCHEDULES — Normalized date-based event schedules
+# =============================================================================
+# Instead of separate coupon_schedule, fixing_schedule, barrier_schedule,
+# amort_schedule, call_schedule, roll_schedule... ONE normalized structure
+# with a type discriminator handles all of them.
+#
+# Usage: Embedded in instrument type_overlay{}, trade economics.legs[],
+#        or standalone for portfolio cash flow projections.
+#
+# Examples:
+#   { type: COUPON, entries: [{date: 2026-06-15, amount: 25000, ccy: USD, status: PROJECTED}] }
+#   { type: NDF_FIXING, entries: [{date: 2026-06-13, source: WM_REUTERS, status: PENDING}] }
+#   { type: BARRIER_CHECK, entries: [{date: 2026-03-20, level: 1.085, direction: UP}] }
+#   { type: AMORTIZATION, entries: [{date: 2026-06-01, notional: 45000000}] }
+# =============================================================================
+
+blueprint: partial
+description: "Normalized date-based schedules — payments, fixings, barriers, amortization"
+
+fields:
+  schedules:
+    type: list
+    grid: "12"
+    group: schedules
+    description: "All date-based schedules for this instrument/trade"
+    items:
+      type: dict
+      items:
+        # ── Schedule Identity ──
+        schedule_type:  { type: str, required: true, grid: "3", enum: [COUPON, PRINCIPAL, AMORTIZATION, CALL, PUT, SINK, RESET, NDF_FIXING, BARRIER_CHECK, EXPIRY, EXERCISE, ROLL, DELIVERY, MARGIN_CALL, DIVIDEND, PAYMENT, CUSTOM], description: "Schedule type discriminator" }
+        # COUPON         — periodic interest payments (bonds, swaps)
+        # PRINCIPAL      — principal repayment (amort bonds, MBS paydowns)
+        # AMORTIZATION   — notional step-down schedule (amort swaps)
+        # CALL           — callable bond call dates/prices
+        # PUT            — putable bond put dates/prices
+        # SINK           — sinking fund schedule
+        # RESET          — float rate reset dates (IRS, FRN)
+        # NDF_FIXING     — NDF valuation/fixing dates
+        # BARRIER_CHECK  — discrete barrier observation dates
+        # EXPIRY         — option/warrant expiry schedule (Bermudan)
+        # EXERCISE       — exercise window dates (Bermudan swaption)
+        # ROLL           — futures/swap roll dates
+        # DELIVERY       — physical delivery dates
+        # MARGIN_CALL    — scheduled margin call dates
+        # DIVIDEND       — ex-date, record date, pay date
+        # PAYMENT        — generic cash flow payment dates
+        # CUSTOM         — user-defined schedule type
+
+        label:          { type: str, grid: "3", description: "Human-readable label (e.g., 'Fixed Leg Coupons', 'Near Leg NDF Fix')" }
+        leg_id:         { type: str, grid: "2", description: "Associated leg ID (for multi-leg products)" }
+        ccy:            { type: str, grid: "2", description: "Schedule currency (applies to all entries unless overridden)" }
+        day_count:      { type: str, grid: "3", description: "Day count convention (if relevant)" }
+        frequency:      { type: str, grid: "2", enum: [DAILY, WEEKLY, MONTHLY, QUARTERLY, SEMI_ANNUAL, ANNUAL, IRREGULAR, ONCE], description: "Schedule frequency" }
+
+        # ── Entries (the actual dated events) ──
+        entries:
+          type: list
+          required: true
+          grid: "12"
+          description: "Ordered list of schedule entries"
+          items:
+            type: dict
+            items:
+              # ── Date (required for all types) ──
+              date:           { type: date, required: true, grid: "3", description: "Schedule date" }
+              end_date:       { type: date, grid: "3", description: "Period end date (for accrual periods)" }
+
+              # ── Status ──
+              status:         { type: str, grid: "2", enum: [PROJECTED, CONFIRMED, PAID, RECEIVED, FIXED, EXERCISED, TRIGGERED, MISSED, CANCELLED, PENDING], description: "Entry status" }
+
+              # ── Amount / Value (used by COUPON, PRINCIPAL, AMORT, PAYMENT, DIVIDEND) ──
+              amount:         { type: float, grid: "3", description: "Cash amount (coupon, principal, dividend)" }
+              ccy:            { type: str, grid: "2", description: "Entry-level currency override" }
+              notional:       { type: float, grid: "3", description: "Remaining notional after this date (AMORTIZATION)" }
+
+              # ── Rate (used by RESET, COUPON on floaters) ──
+              rate:           { type: float, grid: "3", description: "Fixed rate, observed float rate, or accrual rate" }
+              index_value:    { type: float, grid: "3", description: "Observed index value (SOFR, EURIBOR)" }
+              spread:         { type: float, grid: "3", description: "Spread applied to index (bps)" }
+              all_in_rate:    { type: float, grid: "3", description: "Index + spread = all-in rate" }
+
+              # ── Fixing (used by NDF_FIXING, RESET) ──
+              fixing_source:  { type: str, grid: "3", description: "Fixing source (WM_REUTERS, BFIX, EMTA, ECB)" }
+              fixing_time:    { type: str, grid: "3", description: "Fixing observation time" }
+              fixing_rate:    { type: float, grid: "3", description: "Observed fixing rate (filled after fixing)" }
+              settlement_amount: { type: float, grid: "3", description: "NDF net settlement amount" }
+
+              # ── Call / Put / Exercise (used by CALL, PUT, EXPIRY, EXERCISE) ──
+              price:          { type: float, grid: "3", description: "Call/put price, or exercise price" }
+              exercise_type:  { type: str, grid: "3", enum: [OPTIONAL, MANDATORY, MAKE_WHOLE, EXTRAORDINARY, SINKING_FUND], description: "Call/exercise type" }
+              notice_date:    { type: date, grid: "3", description: "Notice deadline before exercise" }
+
+              # ── Barrier (used by BARRIER_CHECK) ──
+              level:          { type: float, grid: "3", description: "Barrier level to check" }
+              direction:      { type: str, grid: "2", enum: [UP, DOWN], description: "Barrier direction" }
+              barrier_type:   { type: str, grid: "3", enum: [KNOCK_IN, KNOCK_OUT], description: "Barrier effect" }
+              observed_value: { type: float, grid: "3", description: "Observed underlying value on check date" }
+              triggered:      { type: bool, grid: "2", description: "Whether barrier was triggered" }
+
+              # ── Delivery (used by DELIVERY, ROLL) ──
+              delivery_point: { type: str, grid: "3", description: "Physical delivery location" }
+              contract_ref:   { type: str, grid: "3", description: "Contract reference (for rolls)" }
+
+              # ── Notes ──
+              notes:          { type: str, grid: "6", description: "Free text annotation" }

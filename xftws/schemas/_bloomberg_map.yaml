@@ -1,0 +1,223 @@
+# =============================================================================
+# BLOOMBERG MAP — Mnemonic → Canonical Field Path
+# =============================================================================
+# Single source of truth for ingest pipeline normalization.
+# Format: bbg_mnemonic: canonical.path.to.field
+#
+# Each entry maps a Bloomberg field mnemonic to its location in the
+# normalized data dictionary. The ingest pipeline reads this to transform
+# Bloomberg data into canonical XDS documents.
+# =============================================================================
+
+description: "Bloomberg mnemonic → canonical field path mapping"
+
+# ── Identifiers ──
+identifiers:
+  ID_ISIN: ids.isin
+  ID_CUSIP: ids.cusip
+  ID_SEDOL1: ids.sedol
+  ID_BB_GLOBAL: ids.figi
+  COMPOSITE_ID_BB_GLOBAL: ids.figi_composite
+  ID_BB_UNIQUE: ids.bb_unique
+  ID_COMMON: ids.common_code
+  ID_WERTPAPIER: ids.wkn
+  TICKER: ids.bb_ticker
+  PARSEKYABLE_DES: ids.bb_ticker
+  MARKET_SECTOR_DES: ids.bb_yellow_key
+  ID_MIC_PRIM_EXCH: ids.mic
+  CFI_CODE: ids.cfi_code
+
+# ── Pricing (universal) ──
+pricing:
+  PX_BID: quote.bid
+  PX_ASK: quote.ask
+  PX_MID: quote.mid
+  PX_LAST: quote.last
+  LAST_PRICE: quote.last
+  PX_CLOSE_1D: quote.prior
+  PX_YEST_CLOSE: quote.prior
+  CHG_NET_1D: quote.change
+  CHG_PCT_1D: quote.change_pct
+  PX_OPEN: quote.open
+  PX_HIGH: quote.high
+  PX_LOW: quote.low
+  PX_CLOSE: quote.close
+  PX_SETTLE: quote.settle
+  PX_VOLUME: quote.volume
+  VOLUME: quote.volume
+  EQY_WEIGHTED_AVG_PX: quote.vwap
+  TURNOVER: quote.turnover
+  BID_SIZE: quote.bid_size
+  ASK_SIZE: quote.ask_size
+  PX_DIRTY_BID: quote.dirty_bid
+  PX_DIRTY_ASK: quote.dirty_ask
+  PX_DIRTY_MID: quote.dirty_mid
+
+# ── Yields ──
+yields:
+  YLD_YTM_BID: analytics.yield.ytm_bid
+  YLD_YTM_ASK: analytics.yield.ytm_ask
+  YLD_YTM_MID: analytics.yield.ytm_mid
+  YLD_YTW_MID: analytics.yield.ytw
+  YLD_YTC_MID: analytics.yield.ytc
+  YLD_YTP_MID: analytics.yield.ytp
+  YLD_CUR_MID: analytics.yield.current
+  YLD_DISC_MID: analytics.yield.discount
+  REAL_YLD_MID: analytics.yield.real
+  BREAKEVEN_INFLATION: analytics.yield.breakeven
+
+# ── Spreads ──
+spreads:
+  OAS_SPREAD_MID: analytics.spread.oas
+  Z_SPRD_MID: analytics.spread.zspread
+  I_SPRD_MID: analytics.spread.ispread
+  G_SPRD_MID: analytics.spread.gspread
+  ASW_SPREAD: analytics.spread.asw
+  BENCHMARK_SECURITY: analytics.spread.benchmark
+  CDS_BASIS: analytics.spread.cds_basis
+  CDS_5Y: analytics.spread.cds_5y
+
+# ── Duration ──
+duration:
+  DUR_ADJ_MID: analytics.duration.modified
+  MODIFIED_DURATION: analytics.duration.modified
+  MACAULAY_DURATION: analytics.duration.macaulay
+  DUR_ADJ_OAS_MID: analytics.duration.effective
+  EFFECTIVE_DURATION: analytics.duration.effective
+  SPREAD_DUR_MID: analytics.duration.spread_dur
+  CONVEXITY: analytics.duration.convexity
+  EFFECTIVE_CONVEXITY: analytics.duration.eff_convexity
+  DV01: analytics.duration.dv01
+  RISK_MID: analytics.duration.dv01
+  PV01: analytics.duration.pv01
+  WAL: analytics.duration.wal
+
+# ── Greeks ──
+greeks:
+  DELTA: analytics.greeks.delta
+  GAMMA: analytics.greeks.gamma
+  VEGA: analytics.greeks.vega
+  THETA: analytics.greeks.theta
+  RHO: analytics.greeks.rho
+
+# ── Volatility ──
+volatility:
+  IVOL_MID: analytics.volatility.implied
+  IVOL_BID: analytics.volatility.implied_bid
+  IVOL_ASK: analytics.volatility.implied_ask
+  VOLATILITY_10D: analytics.volatility.realized_10d
+  VOLATILITY_30D: analytics.volatility.realized_30d
+  VOLATILITY_90D: analytics.volatility.realized_90d
+  RISK_REVERSAL: analytics.volatility.skew_25d
+  BUTTERFLY: analytics.volatility.butterfly_25d
+  BETA_ADJ_OVERRIDABLE: analytics.volatility.beta
+  BETA_RAW_OVERRIDABLE: analytics.volatility.beta_raw
+
+# ── Risk ──
+risk:
+  HIST_VALUE_AT_RISK_95: analytics.risk.var_95
+  HIST_VALUE_AT_RISK_99: analytics.risk.var_99
+  SHARPE_RATIO: analytics.risk.sharpe
+  SORTINO_RATIO: analytics.risk.sortino
+  INFORMATION_RATIO: analytics.risk.info_ratio
+  TRACKING_ERROR: analytics.risk.tracking_error
+  MAX_DRAWDOWN: analytics.risk.max_drawdown
+
+# ── Fundamentals ──
+fundamentals:
+  PE_RATIO: fundamentals.pe
+  BEST_PE_RATIO: fundamentals.pe_forward
+  PX_TO_BOOK_RATIO: fundamentals.pb
+  PX_TO_SALES_RATIO: fundamentals.ps
+  EV_TO_EBITDA: fundamentals.ev_ebitda
+  CUR_MKT_CAP: fundamentals.market_cap
+  ENTERPRISE_VALUE: fundamentals.enterprise_value
+  SALES_REV_TURN: fundamentals.revenue
+  EBITDA: fundamentals.ebitda
+  NET_INCOME: fundamentals.net_income
+  TRAIL_12M_EPS: fundamentals.eps
+  BEST_EPS: fundamentals.eps_forward
+  RETURN_COM_EQY: fundamentals.roe
+  RETURN_ON_ASSET: fundamentals.roa
+  GROSS_MARGIN: fundamentals.gross_margin
+  OPER_MARGIN: fundamentals.oper_margin
+  EQY_DVD_YLD_IND: fundamentals.div_yield
+  DVD_PAYOUT_RATIO: fundamentals.payout_ratio
+
+# ── ESG ──
+esg:
+  ESG_DISCLOSURE_SCORE: esg.disclosure_score
+  ESG_V2_ENVIRON_SCORE: esg.environ_score
+  ESG_V2_SOCIAL_SCORE: esg.social_score
+  ESG_V2_GOVNCE_SCORE: esg.governance_score
+  CARBON_EMISSIONS_SCOPE_1: esg.carbon.scope_1
+  CARBON_EMISSIONS_SCOPE_2: esg.carbon.scope_2
+  CARBON_EMISSIONS_SCOPE_3: esg.carbon.scope_3
+  NUM_EMPLOYEES: esg.employees
+  BOARD_GENDER_DIVERSITY: esg.board_gender_diversity
+
+# ── Equity Overlay ──
+equity:
+  EQY_SH_OUT: overlay.shares_outstanding
+  EQY_FLOAT: overlay.float_shares
+  EQY_FREE_FLOAT_PCT: overlay.float_pct
+  GICS_SECTOR_NAME: overlay.gics_sector
+  GICS_INDUSTRY_NAME: overlay.gics_industry
+
+# ── Fixed Income Overlay ──
+fixed_income:
+  CPN: overlay.coupon
+  CPN_FREQ: overlay.coupon_freq
+  CPN_TYP: overlay.coupon_type
+  DAY_CNT_DES: overlay.day_count
+  PAR_AMT: overlay.face_value
+  AMT_OUTSTANDING: overlay.amt_outstanding
+  RTG_SP: overlay.rating_sp
+  RTG_MOODY: overlay.rating_moody
+  RTG_FITCH: overlay.rating_fitch
+  BB_COMPOSITE: overlay.rating_composite
+  SENIORITY: overlay.seniority
+
+# ── Futures Overlay ──
+futures:
+  FUT_CONT_SIZE: overlay.contract_size
+  FUT_VAL_PT: overlay.val_per_point
+  FUT_TICK_SIZE: overlay.tick_size
+  FUT_TICK_VAL: overlay.tick_val
+  FUT_MONTH_YR: overlay.contract_month
+  FUT_NOTICE_FIRST: overlay.first_notice_date
+  FUT_DLV_DT_FIRST: overlay.first_delivery_date
+  FUT_INIT_SPEC_ML: overlay.initial_margin
+  FUT_MAINT_SPEC_ML: overlay.maint_margin
+  FUT_ROLL_DT: overlay.roll_date
+  FUT_CUR_GEN_TICKER: overlay.generic_ticker
+  FUT_CTD_TICKER: overlay.ctd_ticker
+
+# ── Options Overlay ──
+options:
+  PUT_CALL: overlay.option_type
+  STRIKE_PX: overlay.strike
+  EXPIRE_DT: overlay.expiry_date
+  OPT_STYLE: overlay.exercise_style
+  OPT_CONT_SIZE: overlay.contract_size
+
+# ── MBS Overlay ──
+mbs:
+  POOL_NUMBER: overlay.pool_number
+  MTG_FACTOR: overlay.pool_factor
+  MTG_WAC: overlay.wac
+  MTG_WAM: overlay.wam
+  MTG_WALA: overlay.wala
+  CPR_1M: overlay.cpr_1m
+  CPR_LIFE: overlay.cpr_life
+  PSA_1M: overlay.psa_1m
+  SMM: overlay.smm
+  FICO: overlay.avg_fico
+  LTV: overlay.avg_ltv
+
+# ── FX Overlay ──
+fx:
+  BASE_CRNCY: overlay.base_ccy
+  QUOTE_CRNCY: overlay.quote_ccy
+  SPOT_DT: overlay.spot_date
+  FWD_PTS_MID: overlay.fwd_points

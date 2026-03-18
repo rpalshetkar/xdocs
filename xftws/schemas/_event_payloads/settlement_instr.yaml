@@ -1,0 +1,19 @@
+# =============================================================================
+# SETTLEMENT_INSTR Payload — Settlement/Payment Instruction
+# =============================================================================
+# event_type: SETTLEMENT_INSTR
+# Flow: Payment instruction sent to/received from counterparty
+# =============================================================================
+blueprint: partial
+description: "Settlement instruction — payment direction, amount, SSI details"
+
+fields:
+  payment_direction:  { type: str, required: true, enum: $enums.ENUM_DIRECTION }
+  amount:             { type: float, required: true }
+  ccy:                { type: str, required: true, enum: $enums.ENUM_CCY }
+  value_date:         { type: str, required: true, widget: datepicker }
+  ssi_id:             { type: str, required: true, description: "Our Standard Settlement Instructions" }
+  nostro:             { type: str, description: "Our nostro account" }
+  cpty_ssi:           { type: str, description: "Counterparty SSI" }
+  cpty_entity_id:     { type: str, ref: entities.name }
+  settlement_method:  { type: str, enum: [RTGS, NETTING, CLS, PVP], description: "Settlement mechanism" }

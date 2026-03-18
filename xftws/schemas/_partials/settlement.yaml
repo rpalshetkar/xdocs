@@ -1,0 +1,77 @@
+# =============================================================================
+# SETTLEMENT — Settlement instructions, dates, status, SWIFT, fails
+# =============================================================================
+
+blueprint: partial
+description: "Settlement — SSI, SWIFT, dates, confirmation, fails management"
+
+fields:
+  settlement:
+    type: dict
+    grid: "12"
+    group: settlement
+    description: "Settlement instructions and tracking"
+    items:
+      # ── Dates & Status ──
+      settle_date:        { type: date, grid: "3", description: "Contractual settlement date" }
+      actual_settle_date: { type: date, grid: "3", description: "Actual settlement date" }
+      value_date:         { type: date, grid: "3", description: "Value date (FX)" }
+      settle_type:        { type: str, grid: "3", enum: [DVP, FOP, RVP, PVP, NET, GROSS], description: "Settlement method" }
+      settle_ccy:         { type: str, grid: "2", description: "Settlement currency" }
+      settle_amount:      { type: float, grid: "3", description: "Net settlement amount" }
+      status:             { type: str, grid: "3", enum: [PENDING, INSTRUCTED, MATCHED, AFFIRMED, SETTLED, FAILED, PARTIAL, CANCELLED], description: "Settlement status" }
+      location:           { type: str, grid: "3", enum: [DTC, FICC, EUROCLEAR, CLEARSTREAM, FEDWIRE, CLS, CREST, T2S], description: "Settlement location/CSD" }
+
+      # ── Standing Settlement Instructions ──
+      ssi:
+        type: dict
+        grid: "12"
+        collapsed: true
+        description: "Settlement instructions for both parties"
+        items:
+          ssi_id:           { type: str, grid: "3", description: "SSI identifier" }
+          nostro_account:   { type: str, grid: "3", description: "Our account at correspondent" }
+          nostro_agent:     { type: str, grid: "3", description: "Nostro agent BIC" }
+          intermediary:     { type: str, grid: "3", description: "Intermediary/correspondent BIC" }
+          receiving_agent:  { type: str, grid: "3", description: "Receiving agent BIC" }
+          beneficiary:      { type: str, grid: "3", description: "Beneficiary institution BIC" }
+          cpty_ssi_id:      { type: str, grid: "3", description: "Counterparty SSI ID" }
+          cpty_account:     { type: str, grid: "3", description: "Counterparty account" }
+
+      # ── SWIFT / Confirmation ──
+      swift:
+        type: dict
+        grid: "12"
+        collapsed: true
+        description: "SWIFT confirmation message details"
+        items:
+          mt_type:          { type: str, grid: "3", enum: [MT300, MT304, MT305, MT306, MT320, MT340, MT515, MT518, MT540, MT541, MT542, MT543], description: "SWIFT message type" }
+          swift_ref:        { type: str, grid: "3", description: "SWIFT message reference" }
+          common_ref:       { type: str, grid: "3", description: "Common reference (MT300 field 22C)" }
+          sent_at:          { type: str, grid: "3", description: "Message sent timestamp" }
+          confirmed_at:     { type: str, grid: "3", description: "Confirmation timestamp" }
+
+      # ── Confirmation / Matching ──
+      confirmation:
+        type: dict
+        grid: "12"
+        items:
+          method:           { type: str, grid: "3", enum: [SWIFT, BLOOMBERG_CMS, MARKITWIRE, DTCC_CTM, PAPER, EMAIL], description: "Confirmation method" }
+          status:           { type: str, grid: "3", enum: [UNCONFIRMED, CONFIRMED, MISMATCHED, ALLEGED, DISPUTED], description: "Confirmation status" }
+          match_status:     { type: str, grid: "3", enum: [MATCHED, UNMATCHED, PARTIAL_MATCH], description: "Matching status" }
+          affirmation:      { type: str, grid: "3", enum: [AFFIRMED, UNAFFIRMED, DK], description: "Affirmation status" }
+          break_reason:     { type: str, grid: "4", description: "Mismatch reason (price/qty/date/SSI)" }
+
+      # ── Fails ──
+      fail:
+        type: dict
+        grid: "12"
+        collapsed: true
+        description: "Settlement failure tracking"
+        items:
+          indicator:        { type: bool, grid: "2", description: "Settlement has failed" }
+          reason:           { type: str, grid: "4", enum: [INSUFFICIENT_SECURITIES, INSUFFICIENT_FUNDS, SSI_MISMATCH, COUNTERPARTY_FAIL, SYSTEM_ERROR, REGULATORY_HOLD], description: "Fail reason" }
+          date:             { type: date, grid: "3", description: "Date of failure" }
+          days:             { type: int, grid: "2", description: "Days in fail" }
+          penalty:          { type: float, grid: "3", description: "CSDR penalty amount" }
+          buy_in_notice:    { type: bool, grid: "2", description: "Buy-in notice sent" }

@@ -1,0 +1,48 @@
+# =============================================================================
+# XFTWS DOMAIN MANIFEST
+# =============================================================================
+# Domain configuration for xftws - Fixed Income, Currencies & Commodities Trading
+#
+# Usage:
+#   xds apps fly.xftws          # Deploy to Fly.io
+#   xds apps dev.xftws          # Run locally
+# =============================================================================
+
+name: xftws
+title: XFTWS Trading Workflow
+description: Fixed income, currencies & commodities trading - event-driven lifecycle, risk, matching
+tz: America/New_York
+version: 2.0.0
+icon: trending-up
+accent: emerald
+
+features:
+  - Event-driven matching engine (5 primitives, 24 scenarios)
+  - ISDA FpML product templates
+  - 19-state event lifecycle with schema-driven workflow
+  - Real-time event streaming
+  - Field-level encryption (trade economics, counterparty PII, risk)
+  - Three-layer payload model (raw/payload/enriched)
+  - Trade materialization from correlated bookings
+  - xFTWS Trading Workstation (YAML-driven, 5 workspaces)
+
+components:
+  server:
+    source: ./server
+    entry: xds.api.run
+  workstation:
+    source: ../../apps/xftws
+    config: ./workstation.yaml
+    port: 3001
+
+deploy:
+  group: main
+  platform: railway
+
+tags:
+  - xftws
+  - trading
+  - risk
+  - matching
+  - events
+  - streaming

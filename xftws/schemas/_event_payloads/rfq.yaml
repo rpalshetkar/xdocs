@@ -1,0 +1,41 @@
+# =============================================================================
+# RFQ Payload — Request for Quote
+# =============================================================================
+# event_type: RFQ
+# Flow: Client/sales → dealer(s) requesting pricing
+# =============================================================================
+blueprint: partial
+description: "RFQ canonical payload — price request with direction and limits"
+
+fields:
+  direction:         { type: str, required: true, enum: $enums.ENUM_DIRECTION, description: "BUY or SELL from client perspective" }
+  product_type:      { type: str, required: true, enum: $enums.ENUM_PRODUCT_TYPE }
+  notional:          { type: float, required: true }
+  ccy:               { type: str, required: true, enum: $enums.ENUM_CCY }
+  ccy_pair:          { type: str, description: "Currency pair for FX (e.g., EURUSD)" }
+  tenor:             { type: str, description: "Tenor for IRS/FRA (e.g., 5Y)" }
+  limit_price:       { type: float, description: "Maximum/minimum acceptable price" }
+  valid_until:       { type: str, widget: datetime, description: "RFQ expiry timestamp" }
+  client_entity_id:  { type: str, ref: entities.name }
+  num_dealers:       { type: int, description: "Number of dealers in competition" }
+  dealer_entity_ids: { type: list, description: "Entity IDs of dealers receiving this RFQ" }
+  rfq_mode:          { type: str, enum: [SINGLE, COMPETITIVE], default: SINGLE, description: "Single-dealer or multi-dealer ALLQ mode" }
+  revision:          { type: int, default: 1, description: "RFQ version number (increments on revision)" }
+  negotiation_status: { type: str, enum: $enums.ENUM_NEGOTIATION_STATUS, default: OPEN, description: "Chain negotiation state" }
+  revision_reason:   { type: str, description: "Reason for revision (e.g., size change, price improvement)" }
+
+  # Venue routing (for outbound RFQs)
+  venue:              { type: str, enum: $enums.ENUM_VENUE, description: "Target venue/portal for outbound RFQ" }
+  target_entity_ids:  { type: list, description: "Specific dealer/client entity IDs on the venue" }
+
+  # Sender context (who initiated)
+  rfq_direction:      { type: str, enum: [OUTBOUND, INBOUND], default: INBOUND, description: "OUTBOUND=our desk sends, INBOUND=client sends to us" }
+  initiator_desk:     { type: str, description: "Originating desk (for outbound)" }
+  venue_rfq_id:       { type: str, description: "Venue-assigned RFQ identifier (TradeWeb/MarketAxess ref)" }
+
+  # Spread product fields
+  benchmark:          { type: str, description: "Benchmark reference (e.g., SOFR, USD_MID_SWAP_5Y, IMM_H6)" }
+  spread_bps:         { type: float, description: "Requested spread in basis points over benchmark" }
+  fixing_date:        { type: str, widget: datetime, description: "Benchmark fixing date (for IMM/unfixed)" }
+  fixing_status:      { type: str, enum: $enums.ENUM_FIXING_STATUS, description: "Whether benchmark has fixed" }
+  all_in_price:       { type: float, description: "All-in rate if benchmark is fixed (benchmark + spread)" }

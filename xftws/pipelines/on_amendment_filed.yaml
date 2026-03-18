@@ -1,0 +1,64 @@
+# =============================================================================
+# FLOW: on_amendment_filed
+# =============================================================================
+# Trigger: AMENDMENT event saved
+# Action: Validate amendment, apply diff to target trade, track in transitions[]
+# Primitive: RECONCILIATION (diff)
+# Scenarios: AMENDMENT_RECON
+# =============================================================================
+
+flow: on_amendment_filed
+mode: inline
+on_error: dlq
+category: lifecycle
+description: Process trade amendments with diff tracking and approval workflow
+
+source:
+  type: repo
+  repo: events
+  filter: "event_type == 'AMENDMENT'"
+
+steps:
+  - name: load_target_trade
+    description: Fetch the trade being amended
+    transform:
+      target_event_id: "$.links[?rel=='AMENDS'].event_id"
+      target: "$xu.load_event($.target_event_id)"
+
+  - name: compute_diff
+    description: Compare amendment payload against current trade payload
+    engine: reconciliation
+    config:
+      key_fields: [event_id]
+      tolerance_fields:
+        payload.notional: 0.01
+        payload.rate: 0.0001
+      compare_fields: [payload.notional, payload.rate, payload.currency, payload.value_date, payload.trade_date]
+
+  - name: build_transition_entry
+    transform:
+      transition:
+        from_status: "$.target.status"
+        to_status: PENDING
+        at: "$now"
+        by: "$.payload.amended_by"
+        reason: "$.payload.reason"
+        diff: "$.reconciliation.mismatches"
+
+  - name: apply_amendment
+    filter: "$.payload.amendment_type != 'CANCEL'"
+    transform:
+      target_update:
+        transitions: "$xu.append($.target.transitions, $.transition)"
+        correlation:
+          match_type: RECONCILIATION
+          scenario: AMENDMENT_RECON
+          match_status: MATCHED
+          breaks: "$.reconciliation.breaks"
+
+sinks:
+  - type: event
+    channel: xds:xftws:amendment_result
+  - type: websocket
+    channel: xds:xftws:amendment_result
+    event_type: amendment_result

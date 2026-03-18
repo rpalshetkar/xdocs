@@ -1,0 +1,34 @@
+# =============================================================================
+# OVERLAY: REPO — Repurchase agreement specific terms
+# =============================================================================
+blueprint: partial
+description: "Repo overlay — rate, type, haircut, tri-party, collateral"
+
+fields:
+  repo_rate:          { type: float, grid: "3", description: "Annualized repo interest rate" }
+  repo_type:          { type: str, grid: "3", enum: [CLASSIC, SELL_BUY_BACK, TRI_PARTY, SECURITIES_LENDING_REPO], description: "Repo type" }
+  term_type:          { type: str, grid: "3", enum: [OPEN, TERM, OVERNIGHT, EVERGREEN], description: "Open (callable) vs term (fixed)" }
+  direction:          { type: str, grid: "3", enum: [REPO, REVERSE_REPO], description: "Cash borrower vs lender" }
+  # Cash
+  purchase_price:     { type: float, grid: "3", description: "Cash at start (near leg)" }
+  repurchase_price:   { type: float, grid: "3", description: "Cash at maturity (principal + interest)" }
+  repo_interest:      { type: float, grid: "3", description: "Calculated interest" }
+  # Collateral
+  collateral_isin:    { type: str, grid: "3", description: "Collateral security ISIN" }
+  collateral_type:    { type: str, grid: "3", enum: [GOVT, CORP, MBS, EQUITY, ABS], description: "Collateral type" }
+  collateral_face:    { type: float, grid: "3", description: "Collateral face/par value" }
+  collateral_mv:      { type: float, grid: "3", description: "Collateral market value" }
+  gc_or_specific:     { type: str, grid: "3", enum: [GC, SPECIFIC], description: "General collateral vs named" }
+  gc_basket_id:       { type: str, grid: "3", description: "GC basket identifier" }
+  # Margin
+  haircut_pct:        { type: float, grid: "3", description: "Haircut % = (MV - purchase) / MV" }
+  margin_ratio:       { type: float, grid: "3", description: "MV/Cash ratio (>100%)" }
+  # Tri-party
+  tri_party_agent:    { type: str, grid: "3", enum: [BNY_MELLON, JPM, EUROCLEAR, CLEARSTREAM, SIS], description: "Tri-party agent" }
+  substitution_allowed: { type: bool, grid: "2", description: "Collateral substitution permitted" }
+  # Floating rate repo
+  rate_type:          { type: str, grid: "3", enum: [FIXED, FLOATING], description: "Fixed or floating rate" }
+  float_index:        { type: str, grid: "3", description: "SOFR, EFFR, ESTR (if floating)" }
+  float_spread_bps:   { type: float, grid: "3", description: "Spread over index (bps)" }
+  # Legal
+  master_agreement:   { type: str, grid: "3", enum: [GMRA_2000, GMRA_2011, MRA], description: "Master agreement type" }

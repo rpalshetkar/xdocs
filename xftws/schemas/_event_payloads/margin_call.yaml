@@ -1,0 +1,18 @@
+# =============================================================================
+# MARGIN_CALL Payload — VM/IA Margin Call
+# =============================================================================
+# event_type: MARGIN_CALL
+# Flow: CCP or bilateral margin call (variation or initial)
+# =============================================================================
+blueprint: partial
+description: "Margin call payload — variation margin or initial margin demand"
+
+fields:
+  vm_amount:          { type: float, description: "Variation margin amount" }
+  ia_amount:          { type: float, description: "Initial margin / independent amount" }
+  ccy:                { type: str, required: true, enum: $enums.ENUM_CCY }
+  calculation_date:   { type: str, required: true, widget: datepicker }
+  cpty_entity_id:     { type: str, required: true, ref: entities.name }
+  margin_type:        { type: str, enum: [VM, IA, BOTH], description: "Type of margin call" }
+  collateral_type:    { type: str, description: "Required collateral type (CASH, GOVT_BOND)" }
+  deadline:           { type: str, widget: datetime, description: "Margin payment deadline" }

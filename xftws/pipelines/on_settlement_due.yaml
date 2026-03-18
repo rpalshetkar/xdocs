@@ -1,0 +1,71 @@
+# =============================================================================
+# FLOW: on_settlement_due
+# =============================================================================
+# Trigger: SETTLEMENT_INSTR or NET_SETTLEMENT event saved
+# Action: Match settlement instructions to cleared trades, compute netting
+# Primitive: AGGREGATION (N:1) for netting, RECONCILIATION for settlement match
+# Scenarios: SETTLEMENT, NETTING, MARGIN_RECON
+# =============================================================================
+
+flow: on_settlement_due
+mode: inline
+on_error: dlq
+category: settlement
+description: Process settlement instructions and netting computations
+
+source:
+  type: repo
+  repo: events
+  filter: "event_type IN ('SETTLEMENT_INSTR', 'NET_SETTLEMENT', 'MARGIN_CALL')"
+
+steps:
+  - name: classify_settlement
+    transform:
+      event_id: "$.event_id"
+      event_type: "$.event_type"
+      cpty_id: "$.cpty_id"
+      settlement_type: "$xu.classify_settlement($.event_type)"
+
+  - name: find_settled_trades
+    description: Locate CLEARED trades eligible for this settlement
+    transform:
+      trade_query:
+        cpty_id: "$.cpty_id"
+        status: CLEARED
+        value_date: "$.payload.value_date"
+
+  - name: compute_netting
+    filter: "$.event_type == 'NET_SETTLEMENT'"
+    engine: reconciliation
+    config:
+      key_fields: [cpty_id, payload.currency]
+      tolerance_fields:
+        payload.net_amount: 0.01
+      compare_fields: [payload.net_amount, payload.currency, payload.value_date]
+
+  - name: reconcile_settlement
+    filter: "$.event_type == 'SETTLEMENT_INSTR'"
+    engine: reconciliation
+    config:
+      key_fields: [cpty_id, payload.currency, payload.value_date]
+      tolerance_fields:
+        payload.amount: 0.01
+      compare_fields: [payload.amount, payload.currency, payload.value_date, payload.ssi]
+
+  - name: update_trade_status
+    filter: "$.reconciliation.match_status == 'MATCHED'"
+    transform:
+      trade_update:
+        status: SETTLED
+        correlation:
+          match_type: RECONCILIATION
+          scenario: SETTLEMENT
+          match_status: MATCHED
+          matched_at: "$now"
+
+sinks:
+  - type: event
+    channel: xds:xftws:settlement_result
+  - type: websocket
+    channel: xds:xftws:settlement_result
+    event_type: settlement_result

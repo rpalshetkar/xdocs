@@ -1,0 +1,18 @@
+# =============================================================================
+# NET_SETTLEMENT Payload — Netted Settlement
+# =============================================================================
+# event_type: NET_SETTLEMENT
+# Flow: Multiple trades netted into single payment per (cpty, ccy, value_date)
+# =============================================================================
+blueprint: partial
+description: "Netted settlement — aggregated payment across multiple trades"
+
+fields:
+  trade_event_ids:    { type: list, required: true, description: "Event IDs of netted trades" }
+  net_amount:         { type: float, required: true, description: "Net payment amount" }
+  ccy:                { type: str, required: true, enum: $enums.ENUM_CCY }
+  value_date:         { type: str, required: true, widget: datepicker }
+  cpty_entity_id:     { type: str, required: true, ref: entities.name }
+  gross_pay:          { type: float, description: "Gross amount we pay" }
+  gross_receive:      { type: float, description: "Gross amount we receive" }
+  trade_count:        { type: int, description: "Number of trades in netting set" }

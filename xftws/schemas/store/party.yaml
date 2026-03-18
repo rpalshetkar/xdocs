@@ -1,0 +1,82 @@
+# =============================================================================
+# PARTY — Universal party (legal entity, CCP, broker, client, desk)
+# =============================================================================
+# Replaces the entity/counterparty split with a single party concept.
+# Every participant in a trade is a party with a type.
+# =============================================================================
+blueprint: schema
+kind: Party
+qualifier: "ftp-"
+xid: party_id|name
+xns: [id, xid]
+description: "Universal party — legal entities, counterparties, CCPs, brokers, desks"
+icon: users
+extends: _system.yaml
+operation: MERGE
+
+sections:
+  - name: identity
+    label: "Party"
+    icon: users
+  - name: settlement
+    label: "Settlement"
+    icon: dollar-sign
+    collapsible: true
+  - name: legal
+    label: "Legal"
+    icon: shield
+    collapsible: true
+  - name: hierarchy
+    label: "Hierarchy"
+    icon: git-branch
+    collapsible: true
+    default_open: false
+  - name: system
+    label: "System"
+    icon: settings
+    collapsible: true
+    default_open: false
+
+views:
+  - type: table
+    label: "Party Grid"
+    icon: table
+    default: true
+  - type: card
+    label: "Party Cards"
+    icon: layout-grid
+    title: name
+    subtitle: party_type
+    badge: status
+  - type: bar
+    label: "By Type"
+    icon: bar-chart
+    x: party_type
+    y: $count
+
+model:
+  fields:
+    # ── Identity ──
+    party_id: { type: str, required: true, key: true, rank: hero, grid: "3", group: identity, col: "2<", placeholder: "FTP-001" }
+    name: { type: str, required: true, fuzzy: true, grid: "4", rank: hero, group: identity, card: title, col: "1<" }
+    short_name: { type: str, grid: "3", group: identity }
+    party_type: { type: str, required: true, facet: true, grid: "3", rank: primary, group: identity, card: subtitle, widget: select, enum: $enums.ENUM_PARTY_TYPE }
+    status: { type: str, facet: true, grid: "3", group: identity, card: badge, widget: select, enum: $enums.ENUM_PARTY_STATUS, col: 4, default: ACTIVE }
+    lei: { type: str, grid: "4", group: identity, description: "Legal Entity Identifier (ISO 17442)" }
+    bic: { type: str, grid: "3", group: identity, description: "SWIFT BIC" }
+    duns: { type: str, grid: "3", group: identity, description: "D-U-N-S Number" }
+    desk: { type: str, facet: true, grid: "3", group: identity }
+    region: { type: str, facet: true, grid: "3", group: identity, widget: select, enum: $enums.ENUM_REGION }
+
+    # ── Settlement ──
+    funding_ccy: { type: str, grid: "3", group: settlement, widget: select, enum: $enums.ENUM_CCY }
+    default_ssi_id: { type: str, grid: "4", group: settlement, description: "Default settlement instruction ID" }
+
+    # ── Legal ──
+    is_netting_eligible: { type: bool, grid: "3", group: legal, default: false, description: "Eligible for close-out netting" }
+    is_csa_agreement: { type: bool, grid: "3", group: legal, default: false, description: "Has CSA/collateral agreement" }
+    jurisdiction: { type: str, grid: "3", group: legal }
+
+    # ── Hierarchy ──
+    parent_party_id: { type: str, grid: "4", group: hierarchy, widget: autocomplete, ref: store_parties.name, description: "Parent entity" }
+    subsidiaries: { type: list, grid: "6", group: hierarchy, widget: tags, description: "Subsidiary party IDs" }

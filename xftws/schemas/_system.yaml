@@ -1,0 +1,6 @@
+blueprint: partial
+extends: ../../../shared/schemas/_system.yaml
+description: "xftws system fields"
+fields:
+  xorigin: { type: str, hidden: true, group: system, enum: [USER, API, SEED, SYNC, SYSTEM, MIGRATION, IMPORT, ADMIN], default: SYSTEM }
+  workflow: { type: str, hidden: true, group: system, enum: [DRAFT, ACTIVE, SUSPENDED, ARCHIVED], default: DRAFT }

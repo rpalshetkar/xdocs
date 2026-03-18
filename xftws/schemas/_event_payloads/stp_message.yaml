@@ -1,0 +1,27 @@
+# =============================================================================
+# STP_MESSAGE Payload — Straight-Through Processing Message
+# =============================================================================
+# event_type: STP_MESSAGE
+# Flow: Inbound FIX/FpML/SWIFT message auto-booked by STP pipeline
+# =============================================================================
+blueprint: partial
+description: "STP message payload — auto-parsed inbound wire message"
+
+fields:
+  parsed_economics:
+    type: dict
+    required: true
+    description: "Economics extracted from wire message"
+    items:
+      product_type:  { type: str, enum: $enums.ENUM_PRODUCT_TYPE }
+      direction:     { type: str, enum: $enums.ENUM_DIRECTION }
+      notional:      { type: float }
+      ccy:           { type: str, enum: $enums.ENUM_CCY }
+      ccy_pair:      { type: str }
+      rate:          { type: float }
+      trade_date:    { type: str, widget: datepicker }
+      value_date:    { type: str, widget: datepicker }
+  sender:       { type: str, required: true, description: "Sending system/counterparty" }
+  receiver:     { type: str, required: true, description: "Receiving system/entity" }
+  stp_status:   { type: str, enum: [PARSED, VALIDATED, BOOKED, FAILED], default: PARSED }
+  error:        { type: str, description: "Parse/validation error if FAILED" }

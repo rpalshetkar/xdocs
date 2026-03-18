@@ -1,0 +1,57 @@
+# =============================================================================
+# FLOW: on_allocation_requested
+# =============================================================================
+# Trigger: ALLOC_SPLIT event saved
+# Action: Validate split sums to block notional, update parent trade status
+# Primitive: ALLOCATION (1:N)
+# Scenarios: BLOCK_ALLOC, ORDER_FILL
+# =============================================================================
+
+flow: on_allocation_requested
+mode: inline
+on_error: dlq
+category: matching
+description: Process block trade allocation splits and validate completeness
+
+source:
+  type: repo
+  repo: events
+  filter: "event_type == 'ALLOC_SPLIT'"
+
+steps:
+  - name: load_parent_trade
+    description: Fetch the block trade being allocated
+    transform:
+      parent_event_id: "$.links[?rel=='CHILD_OF'].event_id"
+      parent: "$xu.load_event($.parent_event_id)"
+      block_notional: "$.parent.payload.notional"
+
+  - name: load_existing_splits
+    description: Find all ALLOC_SPLIT events linked to this parent
+    transform:
+      all_splits: "$xu.find_events({ links: { event_id: $.parent_event_id, rel: 'CHILD_OF' }, event_type: 'ALLOC_SPLIT' })"
+      allocated_total: "$xu.sum($.all_splits, 'payload.notional')"
+
+  - name: validate_allocation
+    transform:
+      remaining: "$xu.subtract($.block_notional, $.allocated_total)"
+      is_complete: "$xu.lte($.remaining, 0.01)"
+      allocation_pct: "$xu.divide($.allocated_total, $.block_notional)"
+
+  - name: update_parent_status
+    filter: "$.is_complete == true"
+    transform:
+      parent_update:
+        correlation:
+          match_type: ALLOCATION
+          cardinality: ONE_TO_MANY
+          match_status: MATCHED
+          matched_at: "$now"
+        status: MATCHED
+
+sinks:
+  - type: event
+    channel: xds:xftws:allocation_result
+  - type: websocket
+    channel: xds:xftws:allocation_result
+    event_type: allocation_result

@@ -1,0 +1,678 @@
+# =============================================================================
+# XFTWS SHARED ENUMS
+# =============================================================================
+# Domain: xftws (Fixed Income, Currencies & Commodities Trading)
+# Usage: enum: $enums.ENUM_PRODUCT_TYPE, enum: $enums.ENUM_LEG_TYPE, etc.
+# Convention: value keys are CAPS, labels are Capitalized
+# =============================================================================
+
+blueprint: enum
+kind: XFTWSEnums
+description: Shared enumerations for xftws domain
+
+enums:
+  # ===========================================================================
+  # PRODUCT & TRADE ENUMS
+  # ===========================================================================
+  ENUM_PRODUCT_TYPE:
+    - { value: FX_SPOT, label: "FX Spot", icon: repeat }
+    - { value: FX_FORWARD, label: "FX Forward", icon: repeat }
+    - { value: FX_SWAP, label: "FX Swap", icon: repeat }
+    - { value: FX_NDF, label: "FX NDF", icon: repeat }
+    - { value: FX_OPTION, label: "FX Option", icon: target }
+    - { value: IRS, label: "Interest Rate Swap", icon: trending-up }
+    - { value: XCCY_SWAP, label: "Cross-Currency Swap", icon: trending-up }
+    - { value: SWAPTION, icon: target }
+    - { value: FRA, label: "Forward Rate Agreement", icon: trending-up }
+    - { value: BOND, icon: file-text }
+    - { value: BOND_FUTURE, label: "Bond Future", icon: file-text }
+    - { value: REPO, label: "Repo", icon: repeat }
+    - { value: CDS, label: "Credit Default Swap", icon: shield }
+    - { value: TRS, label: "Total Return Swap", icon: trending-up }
+    - { value: EQUITY, icon: bar-chart }
+
+  ENUM_TRADE_STATUS:
+    - { value: PENDING, color: amber }
+    - { value: CONFIRMED, color: blue }
+    - { value: MATCHED, color: green }
+    - { value: SETTLED, color: green }
+    - { value: CANCELLED, color: red }
+
+  ENUM_DIRECTION:
+    - { value: PAY, icon: arrow-up, color: red }
+    - { value: RECEIVE, icon: arrow-down, color: green }
+
+  # ===========================================================================
+  # LEG ENUMS (grouped by product_type for depends_on cascade)
+  # ===========================================================================
+  ENUM_LEG_TYPE:
+    - { value: SPOT, group: FX_SPOT }
+    - { value: FORWARD, group: FX_FORWARD }
+    - { value: NEAR_LEG, label: "Near Leg", group: FX_SWAP }
+    - { value: FAR_LEG, label: "Far Leg", group: FX_SWAP }
+    - { value: NDF, group: FX_NDF }
+    - { value: FIXED, label: "Fixed Rate", group: IRS }
+    - { value: FLOAT, label: "Floating Rate", group: IRS }
+    - { value: PAY_LEG, label: "Pay Leg", group: XCCY_SWAP }
+    - { value: RECEIVE_LEG, label: "Receive Leg", group: XCCY_SWAP }
+    - { value: OPTION, group: FX_OPTION }
+    - { value: UNDERLYING, group: SWAPTION }
+    - { value: FRA_LEG, label: "FRA", group: FRA }
+    - { value: BOND_LEG, group: BOND }
+    - { value: FUTURE, group: BOND_FUTURE }
+    - { value: REPO_LEG, group: REPO }
+    - { value: PROTECTION, group: CDS }
+    - { value: PREMIUM_LEG, label: "Premium Leg", group: CDS }
+    - { value: RETURN_LEG, label: "Return Leg", group: TRS }
+    - { value: FINANCING_LEG, label: "Financing Leg", group: TRS }
+    - { value: EQUITY_LEG, group: EQUITY }
+    - FEE
+    - PAYMENT
+
+  # ===========================================================================
+  # ENTITY & BOOK ENUMS
+  # ===========================================================================
+  ENUM_ENTITY_TYPE:
+    - { value: LEGAL_ENTITY, icon: building }
+    - { value: TRADING_DESK, icon: monitor }
+    - { value: BRANCH, icon: git-branch }
+    - { value: CCP, label: "CCP", icon: shield }
+    - { value: BROKER, icon: user }
+
+  ENUM_ENTITY_STATUS:
+    - { value: ACTIVE, color: green }
+    - { value: INACTIVE, color: grey }
+    - { value: SUSPENDED, color: red }
+
+  ENUM_REGION:
+    - { value: US, label: "Americas" }
+    - { value: EU, label: "EMEA" }
+    - { value: APAC, label: "Asia Pacific" }
+
+  ENUM_BOOK_STATUS:
+    - { value: ACTIVE, color: green }
+    - { value: INACTIVE, color: grey }
+    - { value: CLOSED, color: red }
+
+  # ===========================================================================
+  # UNIFIED EVENT TYPE — polymorphic discriminator for payload{}
+  # ===========================================================================
+  ENUM_EVENT_TYPE:
+    # Pre-trade
+    - { value: AXE, label: "Axe / IOI", icon: radio, color: cyan }
+    - { value: RFQ, label: "Request for Quote", icon: help-circle, color: blue }
+    - { value: QUOTE, icon: message-square, color: blue }
+    - { value: ORDER, icon: shopping-cart, color: blue }
+    - { value: AUCTION_BID, label: "Auction Bid", icon: gavel, color: violet }
+    # Booking
+    - { value: SALES_BOOKING, label: "Sales Booking", icon: edit, color: amber }
+    - { value: TRADING_BOOKING, label: "Trading Booking", icon: edit-2, color: amber }
+    - { value: TRADING_ACCEPT, label: "Trading Accept", icon: check, color: amber }
+    - { value: OBO_TICKET, label: "On-Behalf-Of Ticket", icon: user-check, color: amber }
+    - { value: STP_MESSAGE, label: "STP Message", icon: cpu, color: amber }
+    # External
+    - { value: BROKER_FILL, label: "Broker Fill", icon: check-square, color: green }
+    - { value: CLEARING_MSG, label: "Clearing Message", icon: shield, color: green }
+    - { value: CLEARING_SUBMISSION, label: "Clearing Submission", icon: upload, color: blue }
+    - { value: AFFIRM_MSG, label: "Affirmation", icon: check-circle, color: green }
+    - { value: GIVEUP_NOTICE, label: "Give-Up Notice", icon: arrow-right, color: blue }
+    - { value: GIVEUP_ACCEPT, label: "Give-Up Accept", icon: check-circle, color: green }
+    # Matching
+    - { value: MATCH, icon: git-merge, color: green }
+    - { value: UNMATCH, icon: git-branch, color: amber }
+    # Lifecycle
+    - { value: ALLOC_SPLIT, label: "Allocation Split", icon: scissors, color: purple }
+    - { value: SETTLEMENT_INSTR, label: "Settlement Instruction", icon: dollar-sign, color: green }
+    - { value: MARGIN_CALL, label: "Margin Call", icon: alert-triangle, color: red }
+    - { value: NET_SETTLEMENT, label: "Netted Settlement", icon: layers, color: green }
+    - { value: AMENDMENT, icon: edit-3, color: amber }
+    - { value: CANCEL_REQUEST, label: "Cancel Request", icon: x-circle, color: red }
+    - { value: CANCEL_CONFIRM, label: "Cancel Confirm", icon: x-square, color: red }
+    - { value: NOVATION_REQUEST, label: "Novation Request", icon: repeat, color: blue }
+    - { value: NOVATION_ACCEPT, label: "Novation Accept", icon: check-circle, color: blue }
+    - { value: EXERCISE_NOTICE, label: "Exercise Notice", icon: play, color: green }
+    - { value: INTERNAL_TRANSFER, label: "Internal Transfer", icon: arrow-right, color: amber }
+    # Materialized
+    - { value: TRADE, icon: trending-up, color: green }
+    - { value: RISK_MEASURE, label: "Risk Measure", icon: activity, color: blue }
+    - { value: SCHEDULE_EVENT, label: "Schedule Event", icon: calendar, color: grey }
+    - { value: POSITION_SNAPSHOT, label: "Position Snapshot", icon: camera, color: grey }
+
+  ENUM_EVENT_STATUS:
+    - { value: ACTIVE, color: green, icon: check-circle }
+    - { value: PENDING, color: amber, icon: clock }
+    - { value: MATCHED, color: green, icon: check-circle }
+    - { value: CONFIRMED, color: blue, icon: check }
+    - { value: CLEARED, color: blue, icon: shield }
+    - { value: SETTLED, color: green, icon: check-square }
+    - { value: CANCELLED, color: red, icon: x-circle }
+    - { value: REJECTED, color: red, icon: x }
+    - { value: EXPIRED, color: grey, icon: clock }
+    - { value: FAILED, color: red, icon: alert-octagon }
+    - { value: TRADED_AWAY, color: grey, icon: arrow-right }
+    - { value: STREAMING, color: cyan, icon: radio }
+
+  # ===========================================================================
+  # SOURCE TYPE — originating system
+  # ===========================================================================
+  ENUM_SOURCE_TYPE:
+    - { value: BLOOMBERG, icon: bar-chart }
+    - { value: TRADEWEB, icon: globe }
+    - { value: MARKITWIRE, icon: check-circle }
+    - { value: DTCC, icon: shield }
+    - { value: LCH, icon: shield }
+    - { value: CME, icon: shield }
+    - { value: ICE, icon: shield }
+    - { value: BROKER, icon: user }
+    - { value: STP_PIPELINE, label: "STP Pipeline", icon: cpu }
+    - { value: CLIENT, icon: user }
+    - { value: MANUAL, icon: edit }
+    - { value: BLOOMBERG_CHAT, label: "Bloomberg Chat", icon: message-circle }
+    - { value: SYMPHONY, label: "Symphony", icon: message-circle }
+    - { value: MATCHING_ENG, label: "Matching Engine", icon: git-merge }
+    - { value: NETTING_ENG, label: "Netting Engine", icon: layers }
+    - { value: CFETS, label: "CFETS (China)", icon: globe }
+    - { value: SHCH, label: "Shanghai Clearing House", icon: shield }
+    - { value: CMU, label: "HK CMU (settlement)", icon: shield }
+
+  # ===========================================================================
+  # SCHEDULE & CASHFLOW ENUMS
+  # ===========================================================================
+  ENUM_SCHEDULE_EVENT_TYPE:
+    - { value: PAYMENT, icon: dollar-sign }
+    - { value: RESET, label: "Rate Reset", icon: refresh-cw }
+    - { value: FIXING, icon: crosshair }
+    - { value: EXERCISE, icon: play }
+    - { value: COUPON, icon: percent }
+    - { value: MATURITY, icon: flag }
+
+  ENUM_SCHEDULE_STATUS:
+    - { value: SCHEDULED, color: blue }
+    - { value: FIXED, color: amber }
+    - { value: PAID, color: green }
+    - { value: CANCELLED, color: red }
+
+  # ===========================================================================
+  # MATCHING ENUMS
+  # ===========================================================================
+  ENUM_MATCH_STATUS:
+    # Negotiation states (RFQ/quote chain)
+    - { value: OPEN, label: "Open", color: cyan, icon: message-circle }
+    - { value: QUOTED, label: "Quoted", color: violet, icon: message-square }
+    - { value: ACCEPTED, label: "Accepted", color: emerald, icon: check-circle-2 }
+    # Matching engine states
+    - { value: UNMATCHED, color: red, icon: x-circle }
+    - { value: PARTIAL, label: "Partial Match", color: amber, icon: alert-triangle }
+    - { value: MATCHED, color: green, icon: check-circle }
+    - { value: FORCED, label: "Force Matched", color: blue, icon: check-square }
+    - { value: STREAMING, label: "Streaming", color: cyan, icon: radio }
+
+  # ===========================================================================
+  # AMENDMENT ENUMS
+  # ===========================================================================
+  ENUM_AMENDMENT_TYPE:
+    - { value: ECONOMIC, icon: dollar-sign }
+    - { value: NED, label: "Non-Economic", icon: file-text }
+    - { value: CANCEL, icon: x-circle, color: red }
+    - { value: REBOOK, icon: refresh-cw, color: blue }
+
+  ENUM_AMENDMENT_STATUS:
+    - { value: PENDING, color: amber }
+    - { value: APPROVED, color: green }
+    - { value: REJECTED, color: red }
+    - { value: APPLIED, color: blue }
+
+  ENUM_ALLOCATION_STATUS:
+    - { value: PARTIAL, color: amber }
+    - { value: COMPLETE, color: green }
+    - { value: AMENDED, color: blue }
+    - { value: CANCELLED, color: red }
+
+  # ===========================================================================
+  # RISK ENUMS
+  # ===========================================================================
+  ENUM_METRIC:
+    - { value: MTM, label: "Mark-to-Market", icon: dollar-sign }
+    - { value: DV01, label: "DV01", icon: trending-up }
+    - { value: FXDELTA, label: "FX Delta", icon: activity }
+    - { value: FXVEGA, label: "FX Vega", icon: activity }
+    - { value: VEGA, icon: activity }
+    - { value: FIXING, icon: crosshair }
+    - { value: THETA, icon: clock }
+    - { value: GAMMA, icon: zap }
+    - { value: RHO, icon: percent }
+
+  ENUM_TENOR_BUCKET:
+    - { value: 1M, label: "1 Month" }
+    - { value: 3M, label: "3 Months" }
+    - { value: 6M, label: "6 Months" }
+    - { value: 1Y, label: "1 Year" }
+    - { value: 2Y, label: "2 Years" }
+    - { value: 5Y, label: "5 Years" }
+    - { value: 10Y, label: "10 Years" }
+    - { value: 30Y, label: "30 Years" }
+
+  # ===========================================================================
+  # CURRENCY
+  # ===========================================================================
+  ENUM_CCY:
+    - { value: USD, label: "USD ($)", symbol: "$" }
+    - { value: EUR, label: "EUR (€)", symbol: "€" }
+    - { value: GBP, label: "GBP (£)", symbol: "£" }
+    - { value: JPY, label: "JPY (¥)", symbol: "¥" }
+    - { value: CHF, label: "CHF", symbol: "CHF" }
+    - { value: AUD, label: "AUD (A$)", symbol: "A$" }
+    - { value: CAD, label: "CAD (C$)", symbol: "C$" }
+    - { value: CNY, label: "CNY (¥)", symbol: "¥" }
+    - { value: HKD, label: "HKD (HK$)", symbol: "HK$" }
+    - { value: SGD, label: "SGD (S$)", symbol: "S$" }
+    - { value: INR, label: "INR (₹)", symbol: "₹" }
+    - { value: BRL, label: "BRL (R$)", symbol: "R$" }
+    - { value: MXN, label: "MXN ($)", symbol: "$" }
+    - { value: KRW, label: "KRW (₩)", symbol: "₩" }
+    - { value: TWD, label: "TWD (NT$)", symbol: "NT$" }
+
+  # ===========================================================================
+  # FEE TYPES
+  # ===========================================================================
+  ENUM_FEE_TYPE:
+    - BROKERAGE
+    - COMMISSION
+    - { value: UPFRONT, label: "Upfront Fee" }
+    - BREAK_FEE
+    - AMENDMENT_FEE
+    - { value: CUSTODY, label: "Custody Fee" }
+    - { value: CLEARING, label: "Clearing Fee" }
+    - { value: EXECUTION, label: "Execution Fee" }
+    - { value: SETTLEMENT, label: "Settlement Fee" }
+    - { value: REGULATORY, label: "Regulatory Cost" }
+
+  # ===========================================================================
+  # PROTOCOL — wire protocol used to deliver events
+  # ===========================================================================
+  ENUM_PROTOCOL:
+    - { value: FIX, label: "FIX Protocol", icon: zap }
+    - { value: FPML, label: "FpML (ISDA)", icon: file-text }
+    - { value: SWIFT_MT, label: "SWIFT MT", icon: globe }
+    - { value: SWIFT_MX, label: "SWIFT MX (ISO 20022)", icon: globe }
+    - { value: REST, label: "REST API", icon: cloud }
+    - { value: JSON, label: "JSON", icon: code }
+    - { value: CSV, label: "CSV / Flat File", icon: file }
+    - { value: INTERNAL, label: "Internal", icon: home }
+
+  # ===========================================================================
+  # RAW FORMAT — format of the raw.content field
+  # ===========================================================================
+  ENUM_RAW_FORMAT:
+    - { value: FIX, label: "FIX Tag-Value" }
+    - { value: FPML, label: "FpML XML" }
+    - { value: SWIFT_MT, label: "SWIFT MT" }
+    - { value: SWIFT_MX, label: "SWIFT MX (ISO 20022 XML)" }
+    - { value: JSON, label: "JSON" }
+    - { value: CSV, label: "CSV / Flat File" }
+    - { value: INTERNAL, label: "Internal" }
+    - { value: CHAT, label: "Chat Message" }
+
+  # ===========================================================================
+  # RISK FLAGS — enrichment alerts
+  # ===========================================================================
+  ENUM_RISK_FLAG:
+    - { value: LARGE_NOTIONAL, color: amber, icon: alert-triangle }
+    - { value: CONCENTRATION_RISK, color: red, icon: alert-octagon }
+    - { value: NEW_COUNTERPARTY, color: blue, icon: user-plus }
+    - { value: LIMIT_BREACH, color: red, icon: shield-off }
+    - { value: WASH_TRADE, color: red, icon: alert-octagon }
+    - { value: UNUSUAL_TENOR, color: amber, icon: clock }
+    - { value: OFF_MARKET_PRICE, color: red, icon: trending-down }
+    - { value: SANCTIONS_HIT, color: red, icon: x-octagon }
+
+  # ===========================================================================
+  # REGULATORY REPORTING STATUS
+  # ===========================================================================
+  ENUM_REPORTING_STATUS:
+    - { value: PENDING, color: amber }
+    - { value: REPORTED, color: green }
+    - { value: REJECTED, color: red }
+    - { value: AMENDED, color: blue }
+    - { value: EXEMPT, color: grey }
+
+  # ===========================================================================
+  # SETTLEMENT STATUS
+  # ===========================================================================
+  ENUM_SETTLEMENT_STATUS:
+    - { value: PENDING, color: amber }
+    - { value: INSTRUCTED, color: blue }
+    - { value: MATCHED, color: green }
+    - { value: SETTLED, color: green }
+    - { value: FAILED, color: red }
+
+  # ===========================================================================
+  # LINK TYPES — event-to-event relationship taxonomy
+  # ===========================================================================
+  ENUM_LINK_TYPE:
+    # Correlation
+    - { value: CORRELATES_WITH, label: "Correlates With", icon: git-merge }
+    - { value: RESPONDS_TO, label: "Responds To", icon: corner-down-left }
+    - { value: ORIGINATES_FROM, label: "Originates From", icon: corner-up-right }
+    - { value: COMPETES_WITH, label: "Competes With", icon: users }
+    - { value: TRIGGERED_BY, label: "Triggered By", icon: zap, description: "RFQ triggered by an AXE" }
+    # Hierarchy
+    - { value: PARENT_OF, label: "Parent Of", icon: arrow-down }
+    - { value: CHILD_OF, label: "Child Of", icon: arrow-up }
+    - { value: CREATED_FROM, label: "Created From", icon: git-branch }
+    # Lifecycle
+    - { value: AMENDS, icon: edit-3, color: amber }
+    - { value: SUPERSEDES, icon: fast-forward, color: blue }
+    - { value: CANCELS, icon: x-circle, color: red }
+    # Settlement
+    - { value: SETTLES, icon: check-square, color: green }
+    - { value: NETS_WITH, label: "Nets With", icon: layers, color: green }
+    # Risk/Schedule
+    - { value: MEASURES, icon: activity, color: blue }
+    - { value: SCHEDULES, icon: calendar, color: grey }
+    # Market Data
+    - { value: PRICED_FROM, label: "Priced From", icon: camera, color: purple }
+
+  # ===========================================================================
+  # MATCHING ENGINE ENUMS
+  # ===========================================================================
+  ENUM_MATCH_TYPE:
+    - { value: NEGOTIATION, label: "Negotiation (RFQ chain)", icon: message-circle }
+    - { value: CORRELATION, label: "Correlation (1:1)", icon: git-merge }
+    - { value: RECONCILIATION, label: "Reconciliation (diff)", icon: git-pull-request }
+    - { value: ALLOCATION, label: "Allocation (1:N)", icon: scissors }
+    - { value: AGGREGATION, label: "Aggregation (N:1)", icon: layers }
+    - { value: OVERRIDE, label: "Override (force)", icon: shield }
+
+  ENUM_MATCH_SCENARIO:
+    # Price Discovery
+    - { value: AXE_TO_RFQ, label: "Axe → RFQ", icon: radio, description: "Axe published, client responds with RFQ" }
+    - { value: AXE_WITHDRAW, label: "Axe Withdrawn", icon: x, description: "Axe published then withdrawn" }
+    - { value: RFQ_HIT, label: "RFQ Hit", icon: check-circle }
+    - { value: RFQ_MISS, label: "RFQ Miss", icon: x-circle }
+    - { value: COMPETITIVE_RFQ, label: "Competitive RFQ", icon: users }
+    - { value: VENUE_RFQ, label: "Venue RFQ", icon: globe, description: "RFQ routed via electronic venue (TradeWeb/MarketAxess)" }
+    - { value: CLIENT_RFQ, label: "Client-Initiated RFQ", icon: user, description: "Buy-side sends RFQ to sell-side electronically" }
+    - { value: OUTBOUND_RFQ_HIT, label: "Outbound RFQ Hit", icon: send, description: "Our desk sends RFQ to venue, gets filled" }
+    - { value: OUTBOUND_RFQ_MISS, label: "Outbound RFQ Miss", icon: x, description: "Our desk sends RFQ to venue, no fill" }
+    - { value: STREAMING_QUOTE, label: "Streaming Quote", icon: radio, description: "Continuous two-way indicative pricing" }
+    - { value: STREAM_TO_TRADE, label: "Stream → Trade", icon: zap, description: "Client hits streaming price, firm execution" }
+    - { value: STREAM_TO_RFQ, label: "Stream → RFQ", icon: message-circle, description: "Client sees stream, initiates RFQ for firm" }
+    - { value: SPREAD_RFQ, label: "Spread RFQ", icon: percent, description: "IRS/XCCY RFQ quoted as spread over benchmark" }
+    - { value: IMM_FIXING_RFQ, label: "IMM Fixing RFQ", icon: crosshair, description: "RFQ with pending IMM/benchmark fixing" }
+    # Direct Clearing
+    - { value: DIRECT_CLEARING, label: "Direct Clearing", icon: upload, description: "Bilateral trade submitted directly to CCP" }
+    - { value: CLEARING_REJECTED, label: "Clearing Rejected", icon: x-circle, description: "CCP rejects clearing submission" }
+    # Bond Auction
+    - { value: BOND_AUCTION_FULL, label: "Bond Auction Full", icon: gavel, description: "Primary dealer bid fully awarded" }
+    - { value: BOND_AUCTION_PARTIAL, label: "Bond Auction Partial", icon: gavel, description: "Marginal bidder — partial pro-rata allocation at stop-out yield" }
+    - { value: BOND_AUCTION_MISS, label: "Bond Auction Miss", icon: gavel, description: "Bid yield below stop-out — zero allocation" }
+    # China Connect
+    - { value: BOND_CONNECT_BUY, label: "Bond Connect Buy", icon: globe, description: "Northbound Bond Connect purchase (CNY govt/policy bank)" }
+    - { value: BOND_CONNECT_SELL, label: "Bond Connect Sell", icon: globe, description: "Northbound Bond Connect sale" }
+    - { value: SWAP_CONNECT, label: "Swap Connect", icon: globe, description: "CNY IRS via Swap Connect, cleared at SHCH" }
+    - { value: SWAP_CONNECT_REJECT, label: "Swap Connect Reject", icon: x-circle, description: "SHCH rejects Swap Connect clearing" }
+    # Execution
+    - { value: BACK_TO_BACK, label: "Back to Back", icon: git-merge }
+    - { value: STP_AUTO, label: "STP Auto-Book", icon: cpu }
+    - { value: BROKER_EXEC, label: "Broker Execution", icon: check-square }
+    - { value: OBO_CLIENT, label: "OBO Client", icon: user-check }
+    # Booking
+    - { value: SALES_DIRECT, label: "Sales Direct", icon: git-merge }
+    - { value: TRADER_FIRST, label: "Trader First", icon: git-merge }
+    # Prime Brokerage
+    - { value: GIVEUP, label: "Give-Up", icon: arrow-right }
+    # Matching/Breaks
+    - { value: UNMATCHED_BOOKING, label: "Unmatched Booking", icon: alert-triangle }
+    - { value: PARTIAL_MATCH, label: "Partial Match", icon: alert-triangle }
+    - { value: FAILED_STP, label: "Failed STP", icon: alert-octagon }
+    - { value: FORCE_MATCH, label: "Force Match", icon: shield }
+    - { value: REMATCH, label: "Rematch", icon: git-merge }
+    - { value: DISPUTE, label: "Dispute", icon: alert-triangle }
+    # Product-Specific
+    - { value: FX_COMPENSATION, label: "FX Compensation", icon: repeat }
+    - { value: IRS_CLEARING, label: "IRS Clearing", icon: shield }
+    - { value: BOND_BROKER_EXEC, label: "Bond Broker Exec", icon: file-text }
+    - { value: FX_OPTION_HEDGE, label: "FX Option Hedge", icon: target }
+    # Post-Trade
+    - { value: ALLOCATION, label: "Block Allocation", icon: scissors }
+    - { value: TRADE_CONFIRM, label: "Trade Confirm", icon: check }
+    # Lifecycle
+    - { value: CANCEL, label: "Cancel", icon: x-circle }
+    - { value: NOVATION, label: "Novation", icon: repeat }
+    - { value: ROLL, label: "Roll", icon: refresh-cw }
+    - { value: EXERCISE, label: "Exercise", icon: play }
+    # Recon
+    - { value: SETTLEMENT_RECON, label: "Settlement Recon", icon: dollar-sign }
+    - { value: EOD_POSITION, label: "EOD Position", icon: camera }
+    - { value: MARGIN_RECON, label: "Margin Recon", icon: alert-triangle }
+    - { value: REGULATORY_RECON, label: "Regulatory Recon", icon: shield }
+    # Surveillance
+    - { value: MARKET_ABUSE_SPOOFING, label: "Market Abuse — Spoofing", icon: alert-octagon, color: red }
+    # Ops
+    - { value: COMPRESSION, label: "Compression", icon: layers }
+    # Operational
+    - { value: MANUAL_LINK, label: "Manual Link", icon: link }
+
+  ENUM_CARDINALITY:
+    - { value: ONE_TO_ONE, label: "1:1" }
+    - { value: ONE_TO_MANY, label: "1:N" }
+    - { value: MANY_TO_ONE, label: "N:1" }
+    - { value: MANY_TO_MANY, label: "N:M" }
+
+  ENUM_MATCH_DIRECTION:
+    - { value: LHS, label: "Left-Hand Side", description: "Internal / initiating event" }
+    - { value: RHS, label: "Right-Hand Side", description: "External / confirming event" }
+    - { value: PARENT, description: "Parent in hierarchy" }
+    - { value: CHILD, description: "Child in hierarchy" }
+
+  ENUM_ACTOR_ROLE:
+    - { value: CLIENT, description: "Buy-side client" }
+    - { value: SALES, description: "Sales desk" }
+    - { value: TRADING, description: "Trading desk" }
+    - { value: BROKER, description: "Broker / dealer" }
+    - { value: CCP, description: "Central counterparty / clearing house" }
+    - { value: OPS, description: "Operations / middle office" }
+    - { value: SYSTEM, description: "Automated engine / STP" }
+
+  # ===========================================================================
+  # NEGOTIATION STATUS — RFQ chain progression
+  # ===========================================================================
+  ENUM_NEGOTIATION_STATUS:
+    - { value: OPEN, color: blue, icon: help-circle }
+    - { value: REVISED, color: amber, icon: edit-3 }
+    - { value: ACCEPTED, color: green, icon: check-circle }
+    - { value: TRADED_AWAY, label: "Traded Away", color: red, icon: x-circle }
+    - { value: COVER, color: grey, icon: minus-circle }
+
+  # ===========================================================================
+  # PRIORITY
+  # ===========================================================================
+  ENUM_PRIORITY:
+    - { value: LOW, color: grey, icon: minus }
+    - { value: NORMAL, color: blue, icon: minus }
+    - { value: HIGH, color: amber, icon: arrow-up }
+    - { value: URGENT, color: red, icon: alert-triangle }
+    - { value: CRITICAL, color: red, icon: alert-octagon }
+
+  # ===========================================================================
+  # VENUE — electronic trading venues / dealer portals
+  # ===========================================================================
+  ENUM_VENUE:
+    - { value: TRADEWEB, label: "Tradeweb", icon: globe }
+    - { value: MARKETAXESS, label: "MarketAxess", icon: globe }
+    - { value: BLOOMBERG_RFQ, label: "Bloomberg ALLQ/RFQ", icon: bar-chart }
+    - { value: BONDPOINT, label: "BondPoint", icon: globe }
+    - { value: TRUMID, label: "Trumid", icon: globe }
+    - { value: DIRECTPOOL, label: "DirectPool (D2D)", icon: users }
+    - { value: ICE_BONDS, label: "ICE Bonds", icon: globe }
+    - { value: BILATERAL, label: "Bilateral (Direct)", icon: user }
+    - { value: VOICE, label: "Voice / Phone", icon: phone }
+    - { value: CHAT, label: "Chat (Bloomberg/Symphony)", icon: message-circle }
+    - { value: INTERNAL, label: "Internal Crossing", icon: home }
+    - { value: BOND_CONNECT, label: "Bond Connect (HKMA-CFETS)", icon: globe }
+    - { value: SWAP_CONNECT, label: "Swap Connect (HKMA-CFETS)", icon: globe }
+
+  # ===========================================================================
+  # AXE ENUMS — indication of interest lifecycle
+  # ===========================================================================
+  ENUM_AXE_STATUS:
+    - { value: LIVE, color: green, icon: radio }
+    - { value: UPDATED, color: amber, icon: edit }
+    - { value: WITHDRAWN, color: grey, icon: x }
+    - { value: FILLED, color: emerald, icon: check-circle }
+    - { value: EXPIRED, color: grey, icon: clock }
+
+  ENUM_AXE_TYPE:
+    - { value: NATURAL, label: "Natural Axe", description: "Genuine trading interest" }
+    - { value: INVENTORY, label: "Inventory Axe", description: "Showing from existing position" }
+    - { value: FACILITATION, label: "Facilitation", description: "Willing to facilitate client order" }
+
+  ENUM_AXE_VISIBILITY:
+    - { value: PUBLIC, label: "Public (all clients)", icon: globe }
+    - { value: TIERED, label: "Tiered (select clients)", icon: users }
+    - { value: PRIVATE, label: "Private (named recipients)", icon: lock }
+
+  # ===========================================================================
+  # QUOTE MODE — pricing delivery mode
+  # ===========================================================================
+  ENUM_QUOTE_MODE:
+    - { value: ONE_WAY, label: "One-Way (directional)" }
+    - { value: TWO_WAY, label: "Two-Way (bid/ask)" }
+    - { value: STREAM, label: "Streaming (continuous)" }
+
+  # ===========================================================================
+  # FIXING STATUS — benchmark fixing lifecycle
+  # ===========================================================================
+  ENUM_FIXING_STATUS:
+    - { value: PENDING, color: amber, icon: clock }
+    - { value: FIXED, color: green, icon: check }
+    - { value: ESTIMATED, color: blue, icon: trending-up }
+
+  # ===========================================================================
+  # AUCTION ENUMS — bond auction lifecycle
+  # ===========================================================================
+  ENUM_AUCTION_STATUS:
+    - { value: ANNOUNCED, color: blue, icon: megaphone }
+    - { value: OPEN, color: cyan, icon: clock }
+    - { value: CLOSED, color: amber, icon: lock }
+    - { value: AWARDED, color: green, icon: check-circle }
+    - { value: SETTLED, color: emerald, icon: check-square }
+    - { value: CANCELLED, color: red, icon: x-circle }
+
+  ENUM_AUCTION_TYPE:
+    - { value: NEW_ISSUE, label: "New Issue" }
+    - { value: REOPENING, label: "Reopening" }
+    - { value: TAP, label: "Tap (additional tranche)" }
+
+  # ===========================================================================
+  # CLEARING SUBMISSION ENUMS
+  # ===========================================================================
+  ENUM_CLEARING_CATEGORY:
+    - { value: HOUSE, label: "House (proprietary)" }
+    - { value: CLIENT, label: "Client clearing" }
+    - { value: AFFILIATE, label: "Affiliate" }
+
+  ENUM_SUBMISSION_STATUS:
+    - { value: PENDING, color: amber }
+    - { value: SUBMITTED, color: blue }
+    - { value: ACCEPTED, color: green }
+    - { value: REJECTED, color: red }
+    - { value: PENDING_CPTY, label: "Pending Counterparty", color: amber }
+    - { value: EXPIRED, color: grey }
+
+  # ===========================================================================
+  # STORE ENUMS — normalized presentation layer
+  # ===========================================================================
+  ENUM_PARTY_TYPE:
+    - { value: LEGAL_ENTITY, icon: building }
+    - { value: TRADING_DESK, icon: monitor }
+    - { value: BRANCH, icon: git-branch }
+    - { value: CCP, label: "CCP", icon: shield }
+    - { value: BROKER, icon: user }
+    - { value: CLIENT, icon: user }
+    - { value: PRIME_BROKER, label: "Prime Broker", icon: user }
+    - { value: CUSTODIAN, icon: lock }
+
+  ENUM_PARTY_STATUS:
+    - { value: ACTIVE, color: green }
+    - { value: INACTIVE, color: grey }
+    - { value: SUSPENDED, color: red }
+
+  ENUM_TXN_TYPE:
+    - { value: ORDER, icon: shopping-cart, color: blue }
+    - { value: TRADE, icon: trending-up, color: green }
+    - { value: ALLOCATION, icon: scissors, color: purple }
+    - { value: NOVATION, icon: repeat, color: blue }
+    - { value: COMPRESSION, icon: layers, color: grey }
+
+  ENUM_TXN_STATUS:
+    - { value: PENDING, color: amber }
+    - { value: CONFIRMED, color: blue }
+    - { value: MATCHED, color: green }
+    - { value: SETTLED, color: green }
+    - { value: MATURED, color: grey }
+    - { value: CANCELLED, color: red }
+
+  ENUM_LEG_STATUS:
+    - { value: ACTIVE, color: green }
+    - { value: INACTIVE, color: grey }
+    - { value: CANCELLED, color: red }
+    - { value: EXERCISED, color: blue }
+
+  ENUM_BOOK_TYPE:
+    - { value: TRADING, icon: trending-up }
+    - { value: BANKING, icon: landmark }
+    - { value: HEDGE, icon: shield }
+    - { value: WAREHOUSE, icon: package }
+
+  ENUM_BOOK_SYSTEM:
+    - OMS
+    - RISK
+    - PNL
+    - SETTLEMENT
+    - CLEARING
+    - REGULATORY
+
+  ENUM_SECURITY_TYPE:
+    - { value: BOND, icon: file-text }
+    - { value: SWAP, icon: trending-up }
+    - { value: FX, icon: repeat }
+    - { value: REPO, icon: repeat }
+    - { value: FUTURE, icon: file-text }
+    - { value: OPTION, icon: target }
+    - { value: CDS, icon: shield }
+    - { value: EQUITY, icon: bar-chart }
+    - { value: MBS, icon: file-text }
+    - { value: INDEX, icon: bar-chart }
+
+  ENUM_SECURITY_STATUS:
+    - { value: ACTIVE, color: green }
+    - { value: MATURED, color: grey }
+    - { value: CALLED, color: amber }
+    - { value: DEFAULTED, color: red }
+
+  ENUM_DENOMINATION:
+    - { value: ABSOLUTE, label: "Absolute" }
+    - { value: BPS, label: "Basis Points" }
+    - { value: PCT, label: "Percent" }
+    - { value: RATIO, label: "Ratio" }
+
+  ENUM_OBSERVATION_TYPE:
+    - { value: PRICE, icon: dollar-sign }
+    - { value: RATE_FIX, label: "Rate Fixing", icon: crosshair }
+    - { value: CURVE_POINT, label: "Curve Point", icon: trending-up }
+    - { value: SPREAD, icon: percent }
+    - { value: VOL_SURFACE, label: "Vol Surface", icon: activity }
+    - { value: INDEX, icon: bar-chart }
+
+  ENUM_EXERCISE_STYLE:
+    - EUROPEAN
+    - AMERICAN
+    - BERMUDAN
+
+  ENUM_DAY_COUNT:
+    - { value: ACT360, label: "ACT/360" }
+    - { value: ACT365, label: "ACT/365" }
+    - { value: "30360", label: "30/360" }
+    - { value: ACT_ACT, label: "ACT/ACT" }

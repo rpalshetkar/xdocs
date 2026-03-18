@@ -1,0 +1,35 @@
+# =============================================================================
+# AMENDMENT Payload — Trade Amendment
+# =============================================================================
+# event_type: AMENDMENT
+# Flow: Amendment request with changes[] and approval workflow
+# =============================================================================
+blueprint: partial
+description: "Amendment payload — versioned changes with approval chain"
+
+fields:
+  target_event_id:   { type: str, required: true, description: "Event ID being amended" }
+  amendment_type:    { type: str, required: true, enum: $enums.ENUM_AMENDMENT_TYPE }
+  changes:
+    type: list
+    required: true
+    description: "Field-level changes"
+    items:
+      type: dict
+      items:
+        field:   { type: str, required: true, description: "Field path (e.g., payload.notional)" }
+        old:     { type: str, description: "Previous value" }
+        new:     { type: str, required: true, description: "New value" }
+        reason:  { type: str, description: "Reason for change" }
+  approvals:
+    type: list
+    description: "Approval chain"
+    items:
+      type: dict
+      items:
+        role:      { type: str, description: "Approver role (TRADER, OPS, RISK)" }
+        approver:  { type: str, description: "Person who approved/rejected" }
+        status:    { type: str, enum: [PENDING, APPROVED, REJECTED] }
+        at:        { type: str, widget: datetime }
+        comment:   { type: str }
+  amendment_status:  { type: str, enum: $enums.ENUM_AMENDMENT_STATUS, default: PENDING }

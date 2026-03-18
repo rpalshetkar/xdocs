@@ -1,0 +1,54 @@
+# =============================================================================
+# SALES_BOOKING Payload — Sales-Side Trade Booking
+# =============================================================================
+# event_type: SALES_BOOKING
+# Flow: Sales desk books client trade — LHS of correlation
+# =============================================================================
+blueprint: partial
+description: "Sales booking payload — client-facing trade entry with legs"
+
+fields:
+  trade_economics:
+    type: dict
+    required: true
+    description: "Core trade terms"
+    items:
+      product_type:  { type: str, required: true, enum: $enums.ENUM_PRODUCT_TYPE }
+      trade_date:    { type: str, required: true, widget: datepicker }
+      value_date:    { type: str, widget: datepicker }
+      direction:     { type: str, enum: $enums.ENUM_DIRECTION }
+      notional:      { type: float, required: true }
+      ccy:           { type: str, required: true, enum: $enums.ENUM_CCY }
+      ccy_pair:      { type: str }
+      rate:          { type: float, description: "FX rate or fixed rate" }
+      spread:        { type: float }
+  book_id:       { type: str, required: true, ref: books.name }
+  portfolio:     { type: str }
+  strategy:      { type: str }
+  parties:
+    type: list
+    required: true
+    description: "Trade parties (buyer, seller, broker)"
+    items:
+      type: dict
+      items:
+        role:       { type: str }
+        entity_id:  { type: str, ref: entities.name }
+        trader:     { type: str }
+        sales:      { type: str }
+  legs:
+    type: list
+    description: "Leg-level economics"
+    items:
+      type: dict
+      items:
+        leg_type:    { type: str, enum: $enums.ENUM_LEG_TYPE }
+        direction:   { type: str, enum: $enums.ENUM_DIRECTION }
+        notional:    { type: float }
+        ccy:         { type: str, enum: $enums.ENUM_CCY }
+        rate:        { type: float }
+        start_date:  { type: str, widget: datepicker }
+        end_date:    { type: str, widget: datepicker }
+        day_count:   { type: str }
+        index:       { type: str, description: "Float index (e.g., SOFR, EURIBOR)" }
+        spread_bps:  { type: float }

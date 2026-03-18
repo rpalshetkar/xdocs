@@ -1,0 +1,57 @@
+# =============================================================================
+# FLOW: on_position_snapshot
+# =============================================================================
+# Trigger: POSITION_SNAPSHOT event saved (EOD batch)
+# Action: Reconcile snapshot against computed positions from trade events
+# Primitive: RECONCILIATION (diff)
+# Scenarios: EOD_POSITION, REGULATORY_RECON
+# =============================================================================
+
+flow: on_position_snapshot
+mode: inline
+on_error: dlq
+category: reconciliation
+description: EOD position reconciliation - snapshot vs computed positions
+
+source:
+  type: repo
+  repo: events
+  filter: "event_type == 'POSITION_SNAPSHOT'"
+
+steps:
+  - name: compute_live_positions
+    description: Aggregate TRADE events to compute current position per book+product
+    transform:
+      position_query:
+        book_id: "$.book_id"
+        product_type: "$.product_type"
+        status: ["CONFIRMED", "CLEARED", "SETTLED"]
+        event_type: TRADE
+      computed_positions: "$xu.aggregate_positions($.position_query)"
+
+  - name: reconcile_positions
+    engine: reconciliation
+    config:
+      key_fields: [book_id, product_type, payload.currency]
+      tolerance_fields:
+        payload.net_notional: 100.0
+        payload.mtm: 1.0
+        payload.dv01: 0.01
+      compare_fields: [payload.net_notional, payload.mtm, payload.dv01, payload.position_count]
+
+  - name: flag_breaks
+    filter: "$.reconciliation.match_status != 'MATCHED'"
+    transform:
+      break_alert:
+        severity: HIGH
+        book_id: "$.book_id"
+        product_type: "$.product_type"
+        breaks: "$.reconciliation.breaks"
+        break_count: "$xu.count($.reconciliation.breaks)"
+
+sinks:
+  - type: event
+    channel: xds:xftws:position_recon
+  - type: websocket
+    channel: xds:xftws:position_recon
+    event_type: position_recon

@@ -1,0 +1,31 @@
+# =============================================================================
+# OVERLAY: CDS — Credit Default Swap specific terms
+# =============================================================================
+blueprint: partial
+description: "CDS overlay — reference entity, credit events, restructuring, index CDS"
+
+fields:
+  # Reference
+  ref_entity:         { type: str, grid: "4", description: "Reference entity name" }
+  ref_entity_id:      { type: str, grid: "3", description: "RED code or CLIP (6-char Markit ID)" }
+  ref_obligation:     { type: str, grid: "3", description: "Reference obligation (ISIN/CUSIP)" }
+  seniority:          { type: str, grid: "3", enum: [SNRFOR, SUBLT2, SECDOM, PREFT1], description: "Debt seniority" }
+  restructuring:      { type: str, grid: "3", enum: [CR, MR, MMR, XR], description: "Restructuring clause (Full/Mod/ModMod/No)" }
+  # Terms
+  premium_bps:        { type: float, grid: "3", description: "Running coupon (100bps IG, 500bps HY)" }
+  upfront_fee:        { type: float, grid: "3", description: "Upfront fee (% of notional)" }
+  recovery_rate:      { type: float, grid: "3", description: "Assumed recovery (0.40 IG, 0.25 HY)" }
+  # Credit Events
+  credit_events:      { type: list, grid: "12", description: "Applicable credit events", items: { type: str, enum: [BANKRUPTCY, FAILURE_TO_PAY, RESTRUCTURING, OBLIGATION_ACCELERATION, REPUDIATION_MORATORIUM, GOVERNMENTAL_INTERVENTION] } }
+  # Settlement
+  settlement_type:    { type: str, grid: "3", enum: [PHYSICAL, CASH, AUCTION], description: "Settlement method" }
+  auction_date:       { type: date, grid: "3", description: "ISDA auction date" }
+  auction_price:      { type: float, grid: "3", description: "Final auction price" }
+  # Index CDS
+  index_name:         { type: str, grid: "3", description: "CDX.NA.IG, iTraxx.EUR, etc." }
+  series:             { type: int, grid: "2", description: "Index series number" }
+  version:            { type: int, grid: "2", description: "Version (increments on default)" }
+  on_the_run:         { type: bool, grid: "2", description: "Current on-the-run series" }
+  index_factor:       { type: float, grid: "3", description: "1.0 minus cumulative losses" }
+  tranche_attachment: { type: float, grid: "3", description: "Tranche lower bound (0%, 3%, 7%)" }
+  tranche_detachment: { type: float, grid: "3", description: "Tranche upper bound (3%, 7%, 15%)" }

@@ -1,0 +1,18 @@
+# =============================================================================
+# OVERLAY: EQUITY — Shares, market cap, sector, classification
+# =============================================================================
+blueprint: partial
+description: "Equity product overlay — shares, market cap, sector, GICS"
+
+fields:
+  shares_outstanding: { type: float, grid: "3", bbg: [EQY_SH_OUT], description: "Shares outstanding" }
+  float_shares:       { type: float, grid: "3", bbg: [EQY_FLOAT], description: "Float shares" }
+  float_pct:          { type: float, grid: "3", bbg: [EQY_FREE_FLOAT_PCT], description: "Free float %" }
+  market_cap:         { type: float, grid: "3", bbg: [CUR_MKT_CAP], description: "Market capitalization" }
+  beta:               { type: float, grid: "3", bbg: [BETA_ADJ_OVERRIDABLE], description: "Adjusted beta" }
+  short_interest:     { type: float, grid: "3", bbg: [SHORT_INT], description: "Short interest (shares)" }
+  si_pct_float:       { type: float, grid: "3", bbg: [SI_PERCENT_FLOAT], description: "Short interest as % of float" }
+  # Classification
+  gics_sector:        { type: str, grid: "3", bbg: [GICS_SECTOR_NAME], description: "GICS sector" }
+  gics_industry:      { type: str, grid: "3", bbg: [GICS_INDUSTRY_NAME], description: "GICS industry" }
+  gics_sub_industry:  { type: str, grid: "3", bbg: [GICS_SUB_INDUSTRY_NAME], description: "GICS sub-industry" }

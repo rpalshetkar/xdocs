@@ -1,0 +1,25 @@
+# =============================================================================
+# CLEARING_MSG Payload — CCP Clearing/Novation
+# =============================================================================
+# event_type: CLEARING_MSG
+# Flow: CCP (LCH, CME, ICE) clears trade, novates counterparty
+# =============================================================================
+blueprint: partial
+description: "CCP clearing payload — novation swaps counterparty to CCP"
+
+fields:
+  ccp:              { type: str, required: true, description: "Clearing house (LCH, CME, ICE)" }
+  clearing_id:      { type: str, required: true, description: "CCP clearing reference" }
+  original_cpty:    { type: str, required: true, description: "Original bilateral counterparty" }
+  novated_cpty:     { type: str, required: true, description: "CCP becomes new counterparty" }
+  economics:
+    type: dict
+    description: "Cleared trade economics"
+    items:
+      product_type:  { type: str, enum: $enums.ENUM_PRODUCT_TYPE }
+      notional:      { type: float }
+      ccy:           { type: str, enum: $enums.ENUM_CCY }
+      trade_date:    { type: str, widget: datepicker }
+      value_date:    { type: str, widget: datepicker }
+  margin_required:   { type: float, description: "Initial margin requirement" }
+  clearing_fee:      { type: float, description: "CCP clearing fee" }

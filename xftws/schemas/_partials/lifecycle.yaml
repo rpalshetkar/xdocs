@@ -1,0 +1,83 @@
+# =============================================================================
+# LIFECYCLE — State transitions, amendments, novations
+# =============================================================================
+
+blueprint: partial
+description: "Trade lifecycle — state transitions, amendments, novations, terminations"
+
+fields:
+  lifecycle:
+    type: dict
+    grid: "12"
+    group: lifecycle
+    description: "Trade lifecycle tracking"
+    items:
+      # ── Current State ──
+      state:            { type: str, grid: "3", enum: [NEW, PENDING, CONFIRMED, AFFIRMED, MATCHED, SETTLED, MATURED, CANCELLED, AMENDED, NOVATED, TERMINATED, EXERCISED, ASSIGNED, COMPRESSED, DEFAULTED, DISPUTED], description: "Current lifecycle state" }
+      prior_state:      { type: str, grid: "3", description: "Previous state before transition" }
+      state_reason:     { type: str, grid: "4", description: "Reason for state change" }
+      state_timestamp:  { type: str, grid: "3", description: "When state changed" }
+
+      # ── Transitions (audit trail) ──
+      transitions:
+        type: list
+        grid: "12"
+        collapsed: true
+        description: "Full state transition history"
+        items:
+          type: dict
+          items:
+            from_state:   { type: str, grid: "3", description: "Previous state" }
+            to_state:     { type: str, grid: "3", description: "New state" }
+            reason:       { type: str, grid: "4", description: "Reason for transition" }
+            actor:        { type: str, grid: "3", description: "Who/what triggered" }
+            timestamp:    { type: str, grid: "3", description: "When" }
+
+      # ── Amendment ──
+      amendment:
+        type: dict
+        grid: "12"
+        collapsed: true
+        description: "Amendment details (if state=AMENDED)"
+        items:
+          original_trade_id:  { type: str, grid: "4", description: "Reference to original trade" }
+          amended_fields:     { type: list, grid: "12", description: "List of changed field names" }
+          reason:             { type: str, grid: "4", description: "Amendment reason" }
+          timestamp:          { type: str, grid: "3", description: "Amendment timestamp" }
+
+      # ── Novation ──
+      novation:
+        type: dict
+        grid: "12"
+        collapsed: true
+        description: "Novation details (if state=NOVATED)"
+        items:
+          novation_date:      { type: date, grid: "3", description: "Novation effective date" }
+          old_counterparty:   { type: str, grid: "3", description: "Transferor (stepping out)" }
+          new_counterparty:   { type: str, grid: "3", description: "Transferee (stepping in)" }
+          remaining_party:    { type: str, grid: "3", description: "Party staying in trade" }
+          remaining_notional: { type: float, grid: "3", description: "Notional after partial novation" }
+
+      # ── Termination ──
+      termination:
+        type: dict
+        grid: "12"
+        collapsed: true
+        description: "Early termination details"
+        items:
+          termination_date:   { type: date, grid: "3", description: "Termination effective date" }
+          reason:             { type: str, grid: "4", enum: [MUTUAL, DEFAULT, CREDIT_EVENT, COMPRESSION, EXERCISE, MATURITY], description: "Termination reason" }
+          close_out_amount:   { type: float, grid: "3", description: "Close-out netting amount" }
+          close_out_ccy:      { type: str, grid: "2", description: "Close-out currency" }
+
+      # ── Compression ──
+      compression:
+        type: dict
+        grid: "12"
+        collapsed: true
+        description: "Trade compression details"
+        items:
+          cycle_id:           { type: str, grid: "4", description: "Compression cycle ID" }
+          service:            { type: str, grid: "3", enum: [TRIREDUCE, TRIBALANCE, QUANTILE, LSEG], description: "Compression service" }
+          compressed_from:    { type: list, grid: "12", description: "Original trade IDs that were compressed" }
+          date:               { type: date, grid: "3", description: "Compression date" }

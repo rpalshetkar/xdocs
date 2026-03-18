@@ -1,0 +1,33 @@
+# =============================================================================
+# OVERLAY: MBS — Mortgage-backed securities, pools, prepayment
+# =============================================================================
+blueprint: partial
+description: "MBS overlay — pool data, prepayment speeds, agency, tranche"
+
+fields:
+  # Pool
+  pool_number:      { type: str, grid: "3", bbg: [POOL_NUMBER], description: "Agency pool number" }
+  pool_factor:      { type: float, grid: "3", bbg: [MTG_FACTOR], description: "Fraction of original principal outstanding" }
+  agency:           { type: str, grid: "3", enum: [GNMA, FNMA, FHLMC, PLS], bbg: [AGENCY], description: "Issuing agency" }
+  collateral_type:  { type: str, grid: "3", bbg: [COLLATERAL_TYP], description: "Collateral type (CONV_30YR, ARM, etc.)" }
+  original_face:    { type: float, grid: "3", description: "Original face amount" }
+  current_face:     { type: float, grid: "3", description: "Current face (original × factor)" }
+  # Weighted Averages
+  wac:              { type: float, grid: "3", bbg: [MTG_WAC], description: "Weighted average coupon" }
+  wam:              { type: float, grid: "3", bbg: [MTG_WAM], description: "Weighted average maturity (months)" }
+  wala:             { type: float, grid: "3", bbg: [MTG_WALA], description: "Weighted average loan age (months)" }
+  # Prepayment
+  cpr_1m:           { type: float, grid: "3", bbg: [CPR_1M], description: "1-month CPR" }
+  cpr_life:         { type: float, grid: "3", bbg: [CPR_LIFE], description: "Lifetime CPR" }
+  psa_1m:           { type: float, grid: "3", bbg: [PSA_1M], description: "1-month PSA speed" }
+  smm:              { type: float, grid: "3", bbg: [SMM], description: "Single monthly mortality" }
+  cdr:              { type: float, grid: "3", bbg: [CDR], description: "Constant default rate" }
+  severity:         { type: float, grid: "3", bbg: [SEVERITY], description: "Loss severity" }
+  # Credit
+  avg_fico:         { type: float, grid: "3", bbg: [FICO], description: "Average FICO score" }
+  avg_ltv:          { type: float, grid: "3", bbg: [LTV], description: "Average loan-to-value" }
+  delinq_30d:       { type: float, grid: "3", bbg: [DELINQ_30D], description: "30-day delinquency rate" }
+  delinq_90d:       { type: float, grid: "3", bbg: [DELINQ_90D], description: "90+ day delinquency rate" }
+  # Tranche
+  tranche_type:     { type: str, grid: "3", bbg: [TRANCHE_TYP], description: "SEQ, PAC, TAC, Z, IO, PO" }
+  subordination:    { type: float, grid: "3", bbg: [SUBORD_PCT], description: "Subordination %" }

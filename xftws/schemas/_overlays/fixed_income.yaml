@@ -1,0 +1,28 @@
+# =============================================================================
+# OVERLAY: FIXED INCOME — Coupon, ratings, seniority, structure
+# =============================================================================
+blueprint: partial
+description: "Fixed income overlay — coupon, ratings, seniority, callable/putable"
+
+fields:
+  coupon:           { type: float, grid: "3", bbg: [CPN], description: "Coupon rate (annual %)" }
+  coupon_freq:      { type: str, grid: "3", enum: [ANNUAL, SEMI_ANNUAL, QUARTERLY, MONTHLY, ZERO, AT_MATURITY], bbg: [CPN_FREQ], description: "Coupon frequency" }
+  coupon_type:      { type: str, grid: "3", enum: [FIXED, FLOATING, STEP, ZERO, TOGGLE], bbg: [CPN_TYP], description: "Coupon type" }
+  day_count:        { type: str, grid: "3", enum: [ACT_360, ACT_365, ACT_ACT_ISDA, ACT_ACT_ICMA, "30_360", "30E_360"], bbg: [DAY_CNT_DES], description: "Day count convention" }
+  face_value:       { type: float, grid: "3", bbg: [PAR_AMT], description: "Par/face amount" }
+  amt_outstanding:  { type: float, grid: "3", bbg: [AMT_OUTSTANDING], description: "Amount outstanding" }
+  seniority:        { type: str, grid: "3", enum: [SENIOR_SECURED, SENIOR_UNSECURED, SUBORDINATED, JUNIOR_SUBORDINATED], bbg: [SENIORITY], description: "Debt seniority" }
+  # Ratings
+  rating_sp:        { type: str, grid: "3", bbg: [RTG_SP], description: "S&P rating" }
+  rating_moody:     { type: str, grid: "3", bbg: [RTG_MOODY], description: "Moody's rating" }
+  rating_fitch:     { type: str, grid: "3", bbg: [RTG_FITCH], description: "Fitch rating" }
+  rating_composite: { type: str, grid: "3", bbg: [BB_COMPOSITE], description: "Bloomberg composite rating" }
+  # Structure
+  callable:         { type: bool, grid: "2", bbg: [CALLABLE], description: "Is callable" }
+  putable:          { type: bool, grid: "2", bbg: [PUTABLE], description: "Is putable" }
+  convertible:      { type: bool, grid: "2", bbg: [CONVERTIBLE], description: "Is convertible" }
+  make_whole_call:  { type: bool, grid: "2", bbg: [MAKE_WHOLE_CALL], description: "Make-whole call provision" }
+  call_schedule:    { type: list, grid: "12", collapsed: true, description: "Call dates/prices [{date, price}]" }
+  # Floating rate
+  float_index:      { type: str, grid: "3", bbg: [RESET_IDX], description: "Float rate index (SOFR, EURIBOR)" }
+  float_spread:     { type: float, grid: "3", bbg: [FLT_SPREAD], description: "Float spread (bps)" }

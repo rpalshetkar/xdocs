@@ -1,0 +1,24 @@
+# =============================================================================
+# OVERLAY: FX — Currency pair, forwards, NDF, option specifics
+# =============================================================================
+blueprint: partial
+description: "FX overlay — currency pair, forward points, NDF, fixing"
+
+fields:
+  ccy_pair:               { type: str, grid: "3", description: "Currency pair (e.g., EURUSD)" }
+  base_ccy:               { type: str, grid: "2", bbg: [BASE_CRNCY], description: "Base currency" }
+  quote_ccy:              { type: str, grid: "2", bbg: [QUOTE_CRNCY], description: "Quote currency" }
+  spot_date:              { type: date, grid: "3", bbg: [SPOT_DT], description: "Spot date (T+2)" }
+  spot_rate:              { type: float, grid: "3", description: "Spot reference rate" }
+  fwd_points:             { type: float, grid: "3", bbg: [FWD_PTS_MID], description: "Forward points" }
+  all_in_rate:            { type: float, grid: "3", description: "Spot + forward points" }
+  tenor:                  { type: str, grid: "2", description: "Tenor (ON, TN, SN, 1W, 1M, 3M, 1Y)" }
+  # NDF
+  ndf_indicator:          { type: bool, grid: "2", description: "Non-deliverable forward flag" }
+  fixing_date:            { type: date, grid: "3", description: "NDF fixing/valuation date" }
+  fixing_source:          { type: str, grid: "3", description: "Fixing source (WM/Reuters, BFIX, EMTA)" }
+  fixing_rate:            { type: float, grid: "3", description: "Observed fixing rate" }
+  ndf_settlement_ccy:     { type: str, grid: "2", description: "NDF cash settlement currency" }
+  ndf_settlement_amount:  { type: float, grid: "3", description: "NDF net settlement" }
+  # CLS
+  cls_eligible:           { type: bool, grid: "2", description: "CLS eligible pair" }

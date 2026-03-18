@@ -1,0 +1,165 @@
+# =============================================================================
+# MEASURES — Normalized risk/financial metrics with dimensional coordinates
+# =============================================================================
+# Financial metrics are NOT just scalars — they live on coordinate grids:
+#
+#   DV01 = f(curve, tenor_bucket)
+#     → DV01 of $12,500/bp at the 5Y point on the SOFR curve
+#
+#   Swaption vega = f(expiry_term, underlying_term)
+#     → vega of $8,500 for 3Y expiry into 10Y swap
+#
+#   FX delta = f(ccy_pair)
+#     → EUR delta of 0.85 on EURUSD
+#
+#   Credit CS01 = f(entity, tenor_bucket)
+#     → CS01 of $5,200/bp at the 5Y point on Ford Motor
+#
+# The `coords{}` dict holds the dimensional axes. Each metric can have
+# 0 to N coordinates depending on its dimensionality:
+#   - Scalar: MTM, PNL_DAILY (no coords)
+#   - 1D: DV01 by tenor, FX delta by pair
+#   - 2D: Swaption vega by expiry × underlying, vol surface by strike × tenor
+#   - 3D: Cross-gamma by ccy_pair × ccy_pair × tenor
+#
+# Usage: Embedded in trade enriched{}, position{}, portfolio risk{}.
+# =============================================================================
+
+blueprint: partial
+description: "Normalized financial measures — metric + value + coordinates + denomination"
+
+fields:
+  measures:
+    type: list
+    grid: "12"
+    group: measures
+    description: "Risk and financial metrics with multi-dimensional coordinates"
+    items:
+      type: dict
+      items:
+        # ── Identity ──
+        metric:         { type: str, required: true, grid: "3", description: "Metric name (DV01, MTM, DELTA, PNL_DAILY, VEGA, CS01, FX_EXPOSURE, THETA, GAMMA, RHO...)" }
+        category:       { type: str, grid: "3", enum: [RISK, GREEKS, PNL, VALUATION, SENSITIVITY, EXPOSURE, REGULATORY, ATTRIBUTION, CUSTOM], description: "Metric category" }
+
+        # ── Value ──
+        value:          { type: float, required: true, grid: "3", description: "Metric value" }
+        value_up:       { type: float, grid: "3", description: "Shifted value — up scenario (e.g., +100bp)" }
+        value_down:     { type: float, grid: "3", description: "Shifted value — down scenario (e.g., -100bp)" }
+
+        # ── Denomination / Kind ──
+        kind:           { type: str, required: true, grid: "3", enum: [ABSOLUTE, RATIO, PCT, PER_BP, PER_DAY, PER_VOL_PT, NOTIONAL_PCT, PER_UNIT, BPS, MULTIPLIER], description: "How to interpret the value" }
+        # ABSOLUTE    = dollar amount (MTM=$1.25M, PNL=$50K)
+        # RATIO       = dimensionless (delta=0.85, beta=1.2)
+        # PCT         = percentage (utilization=85%)
+        # PER_BP      = per basis point (DV01=$125/bp)
+        # PER_DAY     = per calendar day (theta=-$3200/day)
+        # PER_VOL_PT  = per volatility point (vega=$8500/vol pt)
+        # NOTIONAL_PCT = as % of notional
+        # BPS         = basis points (spread=150bps)
+
+        # ── Currency ──
+        ccy:            { type: str, grid: "2", description: "Currency of the value (ISO 4217)" }
+
+        # ══════════════════════════════════════════════════════════════
+        # MARKET CONTEXT — the input levels that produced this metric
+        # ══════════════════════════════════════════════════════════════
+        # Stores the market data snapshot used for calculation.
+        # Essential for: P&L explain, audit, revaluation, what-if.
+        #
+        # Examples:
+        #   DV01 at 5Y on SOFR: mkt.rate=4.25, mkt.curve_snap="SOFR-20260318-1600"
+        #   FX delta on EURUSD: mkt.spot=1.0832, mkt.vol=8.5
+        #   Swaption vega 3Y×10Y: mkt.vol=68.5 (normal bps), mkt.fwd_rate=4.15
+        #   MTM of bond: mkt.price=99.75, mkt.yield=4.52, mkt.spread=125
+        # ══════════════════════════════════════════════════════════════
+        mkt:
+          type: dict
+          grid: "12"
+          collapsed: true
+          description: "Market levels used to compute this metric — audit & P&L explain"
+          items:
+            rate:         { type: float, description: "Interest rate / swap rate at the point" }
+            price:        { type: float, description: "Price of the instrument / underlying" }
+            yield_val:    { type: float, description: "Yield at the point" }
+            spread_bps:   { type: float, description: "Spread (OAS, Z, CDS) at the point" }
+            spot:         { type: float, description: "FX spot rate" }
+            fwd_rate:     { type: float, description: "Forward rate at the tenor" }
+            fwd_points:   { type: float, description: "FX forward points" }
+            vol:          { type: float, description: "Implied volatility at the point (%, bps, or normal)" }
+            vol_type:     { type: str, enum: [LOGNORMAL, NORMAL, SHIFTED_LOGNORMAL], description: "Vol convention" }
+            discount_factor: { type: float, description: "Discount factor at the tenor" }
+            survival_prob: { type: float, description: "Survival probability (credit)" }
+            recovery:     { type: float, description: "Recovery rate assumption" }
+            fx_rate:      { type: float, description: "FX rate used for conversion to reporting ccy" }
+            curve_snap:   { type: str, description: "Reference to curve snapshot ID (for full audit)" }
+            snap_ref:     { type: str, description: "Reference to market data snapshot" }
+
+        # ══════════════════════════════════════════════════════════════
+        # DIMENSIONAL COORDINATES — the key innovation
+        # ══════════════════════════════════════════════════════════════
+        # Each metric lives on 0-N dimensional axes. The coords{} dict
+        # holds the named dimensions. Examples:
+        #
+        # Scalar (0D): { metric: MTM, value: 1250000, kind: ABSOLUTE }
+        #   coords: {}
+        #
+        # 1D vector: { metric: DV01, value: 12500, kind: PER_BP }
+        #   coords: { tenor: 5Y, curve: SOFR }
+        #
+        # 2D surface: { metric: VEGA, value: 8500, kind: PER_VOL_PT }
+        #   coords: { term_1: 3Y, term_2: 10Y }
+        #   (3Y expiry into 10Y swap)
+        #
+        # Cross-sensitivity: { metric: CROSS_GAMMA }
+        #   coords: { ccy_pair_1: EURUSD, ccy_pair_2: GBPUSD }
+        # ══════════════════════════════════════════════════════════════
+        coords:
+          type: dict
+          grid: "12"
+          description: "Dimensional coordinates — axes on which this metric lives"
+          items:
+            # ── Tenor / Term axes ──
+            tenor:        { type: str, description: "Primary tenor bucket (ON, 1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y, 7Y, 10Y, 15Y, 20Y, 30Y)" }
+            term_1:       { type: str, description: "First term dimension (swaption expiry, vol surface expiry)" }
+            term_2:       { type: str, description: "Second term dimension (underlying swap tenor, vol surface tenor)" }
+            bucket:       { type: str, description: "Custom bucket label (FRONT, BELLY, LONG_END, or date range)" }
+
+            # ── Instrument / Curve axes ──
+            curve:        { type: str, description: "Reference curve (SOFR, EURIBOR, TREASURY, SONIA, OIS)" }
+            instrument:   { type: str, description: "Reference instrument ID (specific bond, swap, index)" }
+            underlier:    { type: str, description: "Underlying instrument/index (for derivatives)" }
+
+            # ── FX axes ──
+            ccy_pair:     { type: str, description: "FX pair (EURUSD, USDJPY)" }
+            ccy_pair_2:   { type: str, description: "Second FX pair (for cross-gamma)" }
+            base_ccy:     { type: str, description: "Base currency of exposure" }
+            risk_ccy:     { type: str, description: "Risk currency (reporting currency)" }
+
+            # ── Credit axes ──
+            entity:       { type: str, description: "Reference entity (for credit sensitivities like CS01)" }
+            sector:       { type: str, description: "Credit sector (IG, HY, FINANCIALS, etc.)" }
+            rating:       { type: str, description: "Credit rating bucket (AAA, AA, A, BBB, BB, B, CCC)" }
+
+            # ── Vol surface axes ──
+            strike:       { type: float, description: "Strike level (for vol surface point)" }
+            strike_type:  { type: str, enum: [ABSOLUTE, DELTA, MONEYNESS, LOG_MONEYNESS], description: "How strike is expressed" }
+            delta:        { type: float, description: "Delta level (10D, 25D, ATM, 75D, 90D)" }
+
+            # ── Scenario / Stress axes ──
+            scenario:     { type: str, description: "Scenario name (BASE, UP_100BP, DOWN_50BP, FED_HIKE, LEHMAN)" }
+            shift_size:   { type: float, description: "Shift magnitude (100 for +100bp)" }
+            shift_type:   { type: str, enum: [PARALLEL, STEEPENER, FLATTENER, TWIST, CUSTOM], description: "Shift type" }
+
+        # ── Aggregation Metadata ──
+        additive:       { type: bool, grid: "2", default: true, description: "Can be summed across positions (DV01=yes, delta_ratio=no)" }
+        nettable:       { type: bool, grid: "2", default: true, description: "Can be netted (long DV01 vs short DV01)" }
+        leg_id:         { type: str, grid: "2", description: "Leg reference if leg-level metric" }
+
+        # ── Confidence / Model ──
+        confidence:     { type: float, grid: "2", description: "Confidence level (0.95, 0.99 for VaR)" }
+        horizon_days:   { type: int, grid: "2", description: "Time horizon in days (1, 10 for VaR)" }
+        model:          { type: str, grid: "3", description: "Model (HISTORICAL, PARAMETRIC, MONTE_CARLO, SIMM, BLACK_SCHOLES)" }
+
+        # ── Source & Timing ──
+        as_of:          { type: str, grid: "3", description: "Valuation/calculation timestamp" }
+        source:         { type: str, grid: "3", description: "Calculation source (MARS, PORT, INTERNAL, CCP)" }

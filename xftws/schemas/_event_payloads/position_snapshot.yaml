@@ -1,0 +1,28 @@
+# =============================================================================
+# POSITION_SNAPSHOT Payload — EOD Position Snapshot
+# =============================================================================
+# event_type: POSITION_SNAPSHOT
+# Flow: End-of-day position capture for reconciliation
+# =============================================================================
+blueprint: partial
+description: "Position snapshot — book-level position capture for recon"
+
+fields:
+  book_id:       { type: str, required: true, ref: books.name }
+  as_of_date:    { type: str, required: true, widget: datepicker }
+  source:        { type: str, required: true, enum: [OUR_BOOK, CPTY_STATEMENT], description: "Position source for matching" }
+  positions:
+    type: list
+    required: true
+    description: "Individual position entries"
+    items:
+      type: dict
+      items:
+        product_type:  { type: str, enum: $enums.ENUM_PRODUCT_TYPE }
+        ccy:           { type: str, enum: $enums.ENUM_CCY }
+        ccy_pair:      { type: str }
+        net_notional:  { type: float }
+        mtm:           { type: float }
+        trade_count:   { type: int }
+        cpty_id:       { type: str }
+  total_mtm:     { type: float, description: "Total mark-to-market across all positions" }

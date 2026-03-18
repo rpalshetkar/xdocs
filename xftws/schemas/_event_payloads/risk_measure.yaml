@@ -1,0 +1,19 @@
+# =============================================================================
+# RISK_MEASURE Payload — Risk Metric
+# =============================================================================
+# event_type: RISK_MEASURE
+# Flow: Daily risk calculation (MTM, DV01, Greeks) per trade/leg/tenor
+# =============================================================================
+blueprint: partial
+description: "Risk measure — single metric for a trade/leg/tenor bucket"
+
+fields:
+  trade_event_id:  { type: str, required: true, description: "Trade event being measured" }
+  leg_event_id:    { type: str, description: "Specific leg (optional, for leg-level Greeks)" }
+  metric:          { type: str, required: true, enum: $enums.ENUM_METRIC }
+  value:           { type: float, required: true }
+  denomination:    { type: str, enum: $enums.ENUM_CCY, description: "Currency of the value" }
+  tenor_bucket:    { type: str, enum: $enums.ENUM_TENOR_BUCKET, description: "Tenor bucket for sensitivities" }
+  curve:           { type: str, description: "Yield curve or vol surface used" }
+  as_of_date:      { type: str, required: true, widget: datepicker }
+  scenario:        { type: str, description: "Stress scenario name (if not base)" }

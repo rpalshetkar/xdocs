@@ -1,0 +1,31 @@
+# =============================================================================
+# OVERLAY: OPTION — Listed & OTC options, barriers, strategies
+# =============================================================================
+blueprint: partial
+description: "Option overlay — strike, expiry, exercise, barrier, premium"
+
+fields:
+  option_type:        { type: str, grid: "3", enum: [CALL, PUT, PAYER, RECEIVER], bbg: [PUT_CALL], description: "Call/Put" }
+  strike:             { type: float, grid: "3", bbg: [STRIKE_PX], description: "Strike/exercise price" }
+  expiry_date:        { type: date, grid: "3", bbg: [EXPIRE_DT], description: "Expiration date" }
+  exercise_style:     { type: str, grid: "3", enum: [EUROPEAN, AMERICAN, BERMUDAN], bbg: [OPT_STYLE], description: "Exercise style" }
+  contract_size:      { type: float, grid: "3", bbg: [OPT_CONT_SIZE], description: "Contract multiplier (e.g., 100)" }
+  settlement_type:    { type: str, grid: "3", enum: [PHYSICAL, CASH], description: "Settlement type" }
+  underlying_ref:     { type: str, grid: "4", description: "Reference to underlying instrument" }
+  # Premium
+  premium:            { type: float, grid: "3", description: "Option premium" }
+  premium_ccy:        { type: str, grid: "2", description: "Premium currency" }
+  premium_date:       { type: date, grid: "3", description: "Premium payment date" }
+  # Barrier (exotic)
+  barrier_type:       { type: str, grid: "3", enum: [KNOCK_IN, KNOCK_OUT, DOUBLE_KNOCK_IN, DOUBLE_KNOCK_OUT], description: "Barrier type" }
+  barrier_level:      { type: float, grid: "3", description: "Barrier trigger level" }
+  barrier_upper:      { type: float, grid: "3", description: "Upper barrier (double barrier)" }
+  barrier_observation: { type: str, grid: "3", enum: [CONTINUOUS, DISCRETE], description: "Barrier monitoring" }
+  # Digital
+  digital_payout:     { type: float, grid: "3", description: "Fixed payout (digital/binary)" }
+  # Strategy
+  strategy_type:      { type: str, grid: "3", enum: [STRADDLE, STRANGLE, RISK_REVERSAL, BUTTERFLY, COLLAR, SEAGULL, VERTICAL, CALENDAR, CONDOR, IRON_CONDOR], description: "Strategy type" }
+  leg_count:          { type: int, grid: "2", description: "Number of legs in strategy" }
+  # FX-specific
+  cut_time:           { type: str, grid: "3", description: "NY Cut (10:00 ET), Tokyo Cut" }
+  delivery_date:      { type: date, grid: "3", description: "Currency delivery date (expiry+2)" }
