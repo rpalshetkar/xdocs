@@ -1,0 +1,94 @@
+# =============================================================================
+# JOURNAL — Denormalized event record (trade + lifecycle)
+# =============================================================================
+# Flat, query-friendly projection of raw events. Links back to txn/leg
+# for joins. Uses 9-axis pattern shared with measure and mkt for flexible
+# dimensioning of event-specific data.
+# =============================================================================
+blueprint: schema
+kind: Journal
+qualifier: "ftev-"
+xid: event_id
+xns: [id, xid]
+description: "Denormalized event — flat trade and lifecycle events with axis dimensioning"
+icon: zap
+
+sections:
+  - name: identity
+    label: "Event"
+    icon: zap
+  - name: economics
+    label: "Economics"
+    icon: dollar-sign
+  - name: axes
+    label: "Axes"
+    icon: grid
+  - name: actor_section
+    label: "Actor"
+    icon: user
+  - name: lineage
+    label: "Lineage"
+    icon: git-branch
+  - name: system
+    label: "System"
+    icon: settings
+
+views:
+  - type: table
+    label: "Event Grid"
+    icon: table
+    default: true
+  - type: kanban
+    label: "By Status"
+    icon: columns
+    group_by: status
+    title: event_id
+    subtitle: event_type
+  - type: bar
+    label: "By Type"
+    icon: bar-chart
+    x: event_type
+    y: $count
+
+model:
+  fields:
+    # ── Identity ──
+    event_id: { key: true, rank: hero, grid: "3", group: identity, col: "2<", placeholder: "FTEV-001" }
+    event_type: { facet: true, grid: "3", rank: primary, group: identity, enum: $enums.ENUM_EVENT_TYPE }
+    event_date: { grid: "3", group: identity }
+    status: { facet: true, grid: "3", group: identity, card: badge, enum: $enums.ENUM_EVENT_STATUS, default: ACTIVE }
+    txn_id: { grid: "3", group: identity, ref: txns.txn_id }
+    leg_id: { grid: "3", group: identity, ref: legs.leg_id }
+
+    # ── Economics (denormalized) ──
+    notional: { type: float, grid: "3", group: economics }
+    rate: { type: float, grid: "3", group: economics }
+    ccy: { grid: "3", group: economics, enum: $enums.ENUM_CCY }
+    price: { type: float, grid: "3", group: economics }
+    methodology: { grid: "3", group: economics, description: "Pricing methodology" }
+
+    # ── Numeric axes ──
+    x: { type: float, grid: "3", group: axes, description: "Numeric axis 1" }
+    y: { type: float, grid: "3", group: axes, description: "Numeric axis 2" }
+    z: { type: float, grid: "3", group: axes, description: "Numeric axis 3" }
+
+    # ── Text axes ──
+    tx: { grid: "3", group: axes, description: "Text axis 1" }
+    ty: { grid: "3", group: axes, description: "Text axis 2" }
+    tz: { grid: "3", group: axes, description: "Text axis 3" }
+
+    # ── Date axes ──
+    dx: { grid: "3", group: axes, description: "Date axis 1" }
+    dy: { grid: "3", group: axes, description: "Date axis 2" }
+    dz: { grid: "3", group: axes, description: "Date axis 3" }
+
+    # ── Actor ──
+    actor: { grid: "3", group: actor_section }
+    actor_role: { facet: true, grid: "3", group: actor_section, enum: $enums.ENUM_ACTOR_ROLE }
+    desk: { grid: "3", group: actor_section }
+    source: { facet: true, grid: "3", group: actor_section, enum: $enums.ENUM_SOURCE_TYPE }
+
+    # ── Lineage ──
+    chain_id: { grid: "4", group: lineage, description: "Correlation chain grouping" }
+    link_type: { grid: "4", group: lineage, enum: $enums.ENUM_LINK_TYPE }
+    parent_event_id: { grid: "4", group: lineage, description: "Parent event in chain" }

@@ -1,0 +1,503 @@
+# =============================================================================
+# AXIS DEFINITIONS — Golden source for axis semantics per record type
+# =============================================================================
+# All store schemas (mkt, measure, schedule) share the same physical axes:
+#   [KEY]    ta, tb, tc     — text identity
+#   [DIM]    na, nb         — numeric dimensions
+#   [VALUE]  ya, yb, yc     — observed/computed values
+#   [META]   td, da, db     — denomination, dates
+#
+# This config declares what each axis MEANS for each type/subtype.
+# Code, UI, and validation read this — no hardcoded axis semantics anywhere.
+#
+# Keyed by: schema → discriminator value → axis → {role, label?, format?, example?, note?}
+#
+# Display rules:
+#   label  — column header (optional, auto-derived from role if absent: snake_case → Title Case)
+#   format — value formatter: num0, num2, num4, num6, pct2, pct4, bps0, bps2, ccy, date, text
+#            (optional, auto-derived from td denomination if absent)
+#
+# Format reference:
+#   num0   → "95"           num2  → "98.25"       num4   → "4.1200"      num6  → "1.084200"
+#   pct2   → "4.12%"        pct4  → "4.1200%"     bps0   → "125bp"       bps2  → "12.50bp"
+#   ccy    → "$1,250,000"   date  → "2026-03-20"  text   → as-is
+# =============================================================================
+
+# =============================================================================
+# MKT — keyed by observation_type + tb (instrument subtype)
+# =============================================================================
+mkt:
+
+  # ── Rates Curve Instruments ──
+  SOFR_DEPO: &depo
+    ta: { role: ccy, label: "Ccy", example: USD }
+    tb: { role: curve_instrument, label: "Instrument", example: SOFR_DEPO }
+    tc: { role: tenor_label, label: "Tenor", example: ON }
+    td: { role: denomination, example: PCT }
+    na: { role: months_to_maturity, label: "Months", format: num0, example: 1 }
+    ya: { role: rate, label: "Rate", format: pct4, example: 5.33 }
+    da: { role: maturity_date, label: "Maturity", format: date, example: "2026-03-19" }
+
+  SOFR_IMM: &imm
+    ta: { role: ccy, label: "Ccy", example: USD }
+    tb: { role: curve_instrument, label: "Instrument", example: SOFR_IMM }
+    tc: { role: imm_code, label: "Contract", example: M6 }
+    td: { role: denomination, example: ABS }
+    na: { role: months_to_end, label: "End (M)", format: num0, example: 6 }
+    nb: { role: months_to_start, label: "Start (M)", format: num0, example: 3 }
+    ya: { role: futures_price, label: "Price", format: num2, example: 95.78 }
+    yb: { role: implied_rate, label: "Impl Rate", format: pct4, example: 4.22 }
+    da: { role: end_date, label: "End Date", format: date, example: "2026-09-16" }
+    db: { role: expiry_date, label: "Expiry", format: date, example: "2026-06-17" }
+
+  SOFR_FRA: &fra
+    ta: { role: ccy, label: "Ccy", example: USD }
+    tb: { role: curve_instrument, label: "Instrument", example: SOFR_FRA }
+    tc: { role: forward_label, label: "Forward", example: 1Mx3M }
+    td: { role: denomination, example: PCT }
+    na: { role: months_to_end, label: "End (M)", format: num0, example: 3 }
+    nb: { role: months_to_start, label: "Start (M)", format: num0, example: 1 }
+    ya: { role: forward_rate, label: "Fwd Rate", format: pct4, example: 4.85 }
+    da: { role: end_date, label: "End Date", format: date, example: "2026-06-18" }
+    db: { role: start_date, label: "Start Date", format: date, example: "2026-04-20" }
+
+  SOFR_SWAP: &swap
+    ta: { role: ccy, label: "Ccy", example: USD }
+    tb: { role: curve_instrument, label: "Instrument", example: SOFR_SWAP }
+    tc: { role: tenor_label, label: "Tenor", example: 5Y }
+    td: { role: denomination, example: PCT }
+    na: { role: months_to_maturity, label: "Months", format: num0, example: 60 }
+    ya: { role: par_swap_rate, label: "Rate", format: pct4, example: 4.12 }
+    da: { role: maturity_date, label: "Maturity", format: date, example: "2031-03-20" }
+
+  # ── Basis / Cross-Currency ──
+  XCCY_SWAP:
+    ta: { role: pair, example: EURUSD }
+    tb: { role: instrument, example: XCCY_SWAP }
+    tc: { role: tenor_label, example: 5Y }
+    td: { role: denomination, example: BPS }
+    na: { role: months_to_maturity, example: 60 }
+    ya: { role: basis_spread, example: -12.5 }
+    da: { role: maturity_date, example: "2031-03-20" }
+
+  TENOR_BASIS: &basis
+    ta: { role: ccy, example: USD }
+    tb: { role: basis_pair, example: SOFR_3M6M_BASIS }
+    tc: { role: tenor_label, example: 5Y }
+    td: { role: denomination, example: BPS }
+    na: { role: months_to_maturity, example: 60 }
+    ya: { role: basis_spread, example: 12.5 }
+    da: { role: maturity_date, example: "2031-03-20" }
+
+  # ── FX ──
+  FX_SPOT:
+    ta: { role: pair, example: EURUSD }
+    tb: { role: instrument, example: FX_SPOT }
+    tc: { role: label, example: SPOT }
+    td: { role: denomination, example: ABS }
+    na: { role: months_to_value, example: 0 }
+    ya: { role: spot_rate, example: 1.0842 }
+    da: { role: value_date, example: "2026-03-20" }
+
+  FX_FWD:
+    ta: { role: pair, example: EURUSD }
+    tb: { role: instrument, example: FX_FWD }
+    tc: { role: tenor_label, example: 3M }
+    td: { role: denomination, example: ABS }
+    na: { role: months_to_value, example: 3 }
+    ya: { role: outright_rate, example: 1.0798 }
+    yb: { role: forward_points, example: -44.0 }
+    da: { role: value_date, example: "2026-06-20" }
+
+  FX_SWAP:
+    ta: { role: pair, example: EURUSD }
+    tb: { role: instrument, example: FX_SWAP }
+    tc: { role: near_x_far, example: 1Mx3M }
+    td: { role: denomination, example: ABS }
+    na: { role: months_to_far, example: 3 }
+    nb: { role: months_to_near, example: 1 }
+    ya: { role: far_points, example: -44.0 }
+    yb: { role: near_points, example: -15.0 }
+    yc: { role: spot_reference, example: 1.0842 }
+    da: { role: far_value_date, example: "2026-06-20" }
+    db: { role: near_value_date, example: "2026-04-20" }
+
+  # ── Bond ──
+  BOND_PRICE:
+    ta: { role: ccy, example: USD }
+    tb: { role: instrument, example: BOND_PRICE }
+    tc: { role: security_side, example: UST4536_MID }
+    td: { role: denomination, example: ABS }
+    na: { role: months_to_maturity, example: 120 }
+    nb: { role: months_to_next_coupon, example: 5 }
+    ya: { role: clean_price, example: 98.25 }
+    yb: { role: accrued_interest, example: 0.85 }
+    yc: { role: dirty_price, example: 99.10 }
+    da: { role: maturity_date, example: "2036-02-15" }
+    db: { role: next_coupon_date, example: "2026-08-15" }
+
+  # ── FX Volatility ──
+  FX_VOL:
+    ta: { role: pair, example: EURUSD }
+    tb: { role: instrument, example: FX_VOL }
+    tc: { role: expiry_delta_side, example: 3M_25D_P }
+    td: { role: denomination, example: PCT }
+    na: { role: months_to_expiry, example: 3 }
+    nb: { role: delta, example: 25 }
+    ya: { role: implied_vol, example: 8.75 }
+    da: { role: expiry_date, example: "2026-06-17" }
+
+  # ── IR Swaption Vol ──
+  IR_SWPNVOL:
+    ta: { role: ccy, example: USD }
+    tb: { role: instrument, example: IR_SWPNVOL }
+    tc: { role: expiry_x_tenor_strike, example: 5Yx10Y_ATM }
+    td: { role: denomination, example: BPS }
+    na: { role: months_option_expiry, example: 60 }
+    nb: { role: months_swap_tenor, example: 120 }
+    ya: { role: normal_vol, example: 72.5 }
+    da: { role: swap_end_date, example: "2041-03-20" }
+    db: { role: option_expiry_date, example: "2031-03-20" }
+
+  # ── SABR Parameters ──
+  IR_SABR:
+    ta: { role: ccy, example: USD }
+    tb: { role: instrument, example: IR_SABR }
+    tc: { role: expiry_x_tenor_param, example: 5Yx10Y_ALPHA }
+    td: { role: denomination, example: ABS }
+    na: { role: months_option_expiry, example: 60 }
+    nb: { role: months_swap_tenor, example: 120 }
+    ya: { role: sabr_param_value, example: 0.0085 }
+    da: { role: swap_end_date, example: "2041-03-20" }
+    db: { role: option_expiry_date, example: "2031-03-20" }
+
+  # ── Correlation ──
+  CORR:
+    ta: { role: factor_pair, example: EURUSD_USDJPY }
+    tb: { role: instrument, example: CORR }
+    tc: { role: window_label, example: 1Y }
+    td: { role: denomination, example: ABS }
+    na: { role: months_window, example: 12 }
+    ya: { role: correlation, example: 0.58 }
+
+# =============================================================================
+# MEASURE — keyed by metric
+# =============================================================================
+measure:
+
+  # ── Risk Greeks ──
+  DV01:
+    ta: { role: ccy, label: "Ccy", example: USD }
+    tb: { role: curve, label: "Curve", example: SOFR }
+    tc: { role: tenor_label, label: "Tenor", example: 5Y }
+    td: { role: denomination, example: ABS }
+    na: { role: months_to_maturity, label: "Months", format: num0, example: 60 }
+    nb: { role: months_to_start, label: "Start (M)", format: num0, note: "FRA buckets only" }
+    ya: { role: sensitivity, label: "DV01", format: ccy, example: -4523 }
+    mkt_id: { role: curve_point_ref }
+
+  TBO1:
+    ta: { role: ccy, example: USD }
+    tb: { role: short_curve, example: SOFR_3M }
+    tc: { role: tenor_label, example: 5Y }
+    td: { role: denomination, example: ABS }
+    na: { role: months_to_maturity, example: 60 }
+    ya: { role: sensitivity, example: -2500 }
+    mkt_id: { role: basis_spread_ref }
+
+  FXDELTA:
+    ta: { role: risk_factor, label: "Factor", example: EURUSD }
+    tb: { role: original_cross, label: "Cross", example: EURHKD }
+    tc: { role: label, label: "Label" }
+    td: { role: denomination, example: ABS }
+    ya: { role: sensitivity, label: "FX Delta", format: ccy, example: 125000 }
+    mkt_id: { role: fx_fix_ref }
+
+  FXVEGA:
+    ta: { role: pair, example: EURUSD }
+    tb: { role: tenor, example: 3M }
+    tc: { role: label }
+    td: { role: denomination, example: ABS }
+    na: { role: months_to_expiry, example: 3 }
+    ya: { role: sensitivity, example: 8500 }
+    mkt_id: { role: vol_surface_ref }
+
+  MTM:
+    ta: { role: ccy, label: "Ccy", example: USD }
+    td: { role: denomination, example: ABS }
+    ya: { role: mark_to_market, label: "MTM", format: ccy, example: 1250000 }
+
+  NAV:
+    ta: { role: ccy, example: USD }
+    tb: { role: book, example: FX_SPOT_NY }
+    td: { role: denomination, example: ABS }
+    ya: { role: net_asset_value, example: 45000000 }
+
+  PNL:
+    ta: { role: ccy, example: USD }
+    tb: { role: period, example: 1D }
+    td: { role: denomination, example: ABS }
+    ya: { role: pnl, example: 250000 }
+
+  CORR:
+    ta: { role: factor1, example: EURUSD }
+    tb: { role: factor2, example: USDJPY }
+    td: { role: denomination, example: ABS }
+    na: { role: current_correlation, example: 0.65 }
+    ya: { role: sensitivity_per_pct, example: -125000 }
+
+  THETA:
+    ta: { role: ccy, example: USD }
+    td: { role: denomination, example: ABS }
+    ya: { role: daily_decay, example: -3500 }
+
+  GAMMA:
+    ta: { role: ccy, example: USD }
+    td: { role: denomination, example: ABS }
+    ya: { role: gamma, example: 1200 }
+
+  RHO:
+    ta: { role: ccy, example: USD }
+    tb: { role: curve, example: SOFR }
+    td: { role: denomination, example: ABS }
+    ya: { role: sensitivity, example: -8500 }
+
+  # ── Schedule-derived (sparse — next/prev/milestone/monitor) ──
+
+  # Upcoming events
+  NEXT_COUPON:
+    ta: { role: ccy, example: USD }
+    tb: { role: leg_type, example: FIXED }
+    tc: { role: period_seq, example: P3 }
+    td: { role: denomination, example: ABS }
+    na: { role: months_to_pay, example: 3 }
+    ya: { role: coupon_amount, example: 125000 }
+    yb: { role: period_notional, example: 10000000 }
+    da: { role: pay_date, example: "2027-09-20" }
+    db: { role: accrual_start, example: "2027-03-20" }
+
+  NEXT_RESET:
+    ta: { role: ccy, example: USD }
+    tb: { role: index, example: FLOAT_SOFR }
+    tc: { role: reset_seq, example: R3 }
+    td: { role: denomination, example: PCT }
+    na: { role: months_to_fixing, example: 3 }
+    ya: { role: rate, note: "null until fixed" }
+    yb: { role: period_notional, example: 10000000 }
+    da: { role: fixing_date, example: "2027-09-18" }
+    db: { role: accrual_start, example: "2027-09-20" }
+    mkt_id: { role: fixing_ref, note: "wired when rate publishes" }
+
+  NEXT_EXERCISE:
+    ta: { role: ccy, example: USD }
+    tb: { role: exercise_style, example: BERMUDAN }
+    tc: { role: exercise_seq, example: E3 }
+    td: { role: denomination, example: ABS }
+    na: { role: months_to_exercise, example: 12 }
+    nb: { role: months_remaining_swap, example: 84 }
+    ya: { role: intrinsic_value, example: -50000 }
+    yb: { role: implied_vol, example: 72.5 }
+    da: { role: exercise_date, example: "2029-03-20" }
+    db: { role: swap_maturity, example: "2036-03-20" }
+
+  NEXT_CALL:
+    ta: { role: ccy, example: USD }
+    tb: { role: instrument, example: CALLABLE }
+    na: { role: months_to_call, example: 24 }
+    ya: { role: call_price, example: 100.00 }
+    da: { role: call_date, example: "2028-03-20" }
+
+  NEXT_PRINCIPAL:
+    ta: { role: ccy, example: USD }
+    tb: { role: leg_type, example: AMORT }
+    tc: { role: period_seq, example: X2 }
+    td: { role: denomination, example: ABS }
+    na: { role: months_to_exchange, example: 12 }
+    ya: { role: principal_amount, example: 5000000 }
+    yb: { role: remaining_notional, example: 45000000 }
+    da: { role: exchange_date, example: "2027-03-20" }
+
+  NEXT_FIXING:
+    ta: { role: pair, example: EURHKD }
+    tb: { role: instrument, example: NDF_FIX }
+    tc: { role: fixing_seq, example: F1 }
+    td: { role: denomination, example: ABS }
+    na: { role: months_to_fixing, example: 3 }
+    ya: { role: fixing_rate, note: "null until fixed" }
+    yb: { role: notional, example: 1000000 }
+    da: { role: fixing_date, example: "2026-06-18" }
+    db: { role: settlement_date, example: "2026-06-20" }
+    mkt_id: { role: fx_fix_ref, note: "wired when fixing publishes" }
+
+  NEXT_ROLL:
+    ta: { role: ccy_or_pair, example: USD }
+    tb: { role: instrument, example: SOFR_IMM }
+    tc: { role: contract, example: M6 }
+    na: { role: months_to_roll, example: 3 }
+    ya: { role: roll_cost, note: "estimated roll cost" }
+    da: { role: roll_date, example: "2026-06-15" }
+
+  NEXT_PAYMENT:
+    ta: { role: ccy, example: USD }
+    tb: { role: payment_type, example: FEE }
+    td: { role: denomination, example: ABS }
+    na: { role: months_to_payment, example: 1 }
+    ya: { role: amount, example: 25000 }
+    da: { role: payment_date, example: "2026-04-20" }
+
+  # Previous events
+  PREV_COUPON:
+    ta: { role: ccy, example: USD }
+    tb: { role: leg_type, example: FIXED }
+    tc: { role: period_seq, example: P2 }
+    td: { role: denomination, example: ABS }
+    ya: { role: coupon_amount, example: 125000 }
+    da: { role: pay_date, example: "2026-03-20" }
+
+  PREV_RESET:
+    ta: { role: ccy, example: USD }
+    tb: { role: index, example: FLOAT_SOFR }
+    tc: { role: reset_seq, example: R2 }
+    td: { role: denomination, example: PCT }
+    ya: { role: rate, example: 4.25 }
+    da: { role: fixing_date, example: "2026-03-18" }
+    mkt_id: { role: fixing_ref }
+
+  PREV_FIXING:
+    ta: { role: pair, example: EURHKD }
+    tb: { role: instrument, example: NDF_FIX }
+    td: { role: denomination, example: ABS }
+    ya: { role: fixing_rate, example: 7.812 }
+    yb: { role: settlement_amount, example: 50000 }
+    da: { role: fixing_date, example: "2026-03-18" }
+    mkt_id: { role: fx_fix_ref }
+
+  # Lifecycle milestones
+  MATURITY:
+    ta: { role: ccy, example: USD }
+    td: { role: denomination, example: ABS }
+    na: { role: months_to_maturity, example: 60 }
+    ya: { role: final_principal, example: 10000000 }
+    da: { role: maturity_date, example: "2031-03-20" }
+
+  EFFECTIVE:
+    ta: { role: ccy, example: USD }
+    da: { role: effective_date, example: "2026-03-20" }
+
+  FIRST_CALL:
+    ta: { role: ccy, example: USD }
+    na: { role: months_to_call, example: 24 }
+    ya: { role: call_price, example: 100.00 }
+    da: { role: call_date, example: "2028-03-20" }
+
+  # Active monitors
+  BARRIER_KI:
+    ta: { role: pair, example: EURUSD }
+    tb: { role: barrier_type, example: UP_IN }
+    td: { role: denomination, example: ABS }
+    ya: { role: barrier_level, example: 1.1200 }
+    yb: { role: spot_distance, example: 0.0358, note: "current spot - level" }
+    yc: { role: spot_distance_pct, example: 3.30 }
+    da: { role: expiry_date, example: "2026-06-17" }
+
+  BARRIER_KO:
+    ta: { role: pair, example: EURUSD }
+    tb: { role: barrier_type, example: DOWN_OUT }
+    td: { role: denomination, example: ABS }
+    ya: { role: barrier_level, example: 1.0500 }
+    yb: { role: spot_distance, example: 0.0342 }
+    yc: { role: spot_distance_pct, example: 3.15 }
+    da: { role: expiry_date, example: "2026-06-17" }
+
+  TRIGGER:
+    ta: { role: identifier, example: USD }
+    tb: { role: trigger_type, example: TARGET_REDEMPTION }
+    td: { role: denomination, example: ABS }
+    ya: { role: trigger_level, example: 500000 }
+    yb: { role: accumulated, example: 375000 }
+    yc: { role: remaining, example: 125000 }
+
+  # Accrual
+  ACCRUED:
+    ta: { role: ccy, example: USD }
+    tb: { role: leg_type, example: FIXED }
+    td: { role: denomination, example: ABS }
+    na: { role: days_accrued, example: 45 }
+    ya: { role: accrued_amount, example: 15625 }
+    yb: { role: period_notional, example: 10000000 }
+    da: { role: next_pay_date, example: "2026-09-20" }
+    db: { role: last_pay_date, example: "2026-03-20" }
+
+# =============================================================================
+# SCHEDULE — keyed by schedule_type (full diary in datalake)
+# =============================================================================
+diary:
+
+  COUPON:
+    ta: { role: ccy, example: USD }
+    tb: { role: leg_type, example: FIXED_COUPON }
+    tc: { role: period_seq, example: P3 }
+    td: { role: denomination, example: ABS }
+    na: { role: months_from_effective, example: 18 }
+    ya: { role: coupon_amount, example: 125000 }
+    yb: { role: period_notional, example: 10000000 }
+    da: { role: pay_date, example: "2027-09-20" }
+    db: { role: accrual_start, example: "2027-03-20" }
+
+  RESET:
+    ta: { role: ccy, example: USD }
+    tb: { role: index, example: FLOAT_SOFR }
+    tc: { role: reset_seq, example: R3 }
+    td: { role: denomination, example: PCT }
+    na: { role: months_from_effective, example: 18 }
+    ya: { role: rate, note: "null until fixed" }
+    yb: { role: period_notional, example: 10000000 }
+    yc: { role: cashflow_amount, note: "computed after fixing" }
+    da: { role: fixing_date, example: "2027-09-18" }
+    db: { role: accrual_start, example: "2027-09-20" }
+    mkt_id: { role: fixing_ref, note: "wired when rate publishes" }
+
+  PRINCIPAL:
+    ta: { role: ccy, example: USD }
+    tb: { role: leg_type, example: AMORT }
+    tc: { role: period_seq, example: X2 }
+    td: { role: denomination, example: ABS }
+    na: { role: months_from_effective, example: 12 }
+    ya: { role: principal_amount, example: 5000000 }
+    yb: { role: remaining_notional, example: 45000000 }
+    da: { role: exchange_date, example: "2027-03-20" }
+
+  EXERCISE:
+    ta: { role: ccy, example: USD }
+    tb: { role: exercise_style, example: BERMUDAN }
+    tc: { role: exercise_seq, example: E3 }
+    td: { role: denomination, example: ABS }
+    na: { role: months_from_trade, example: 36 }
+    nb: { role: months_remaining_swap, example: 84 }
+    ya: { role: intrinsic_value }
+    yb: { role: implied_vol }
+    da: { role: exercise_date, example: "2029-03-20" }
+    db: { role: swap_maturity, example: "2036-03-20" }
+
+  BARRIER:
+    ta: { role: pair, example: EURUSD }
+    tb: { role: barrier_type, example: BARRIER_KO }
+    tc: { role: observation_seq, example: B1 }
+    td: { role: denomination, example: ABS }
+    na: { role: months_from_trade, example: 3 }
+    ya: { role: barrier_level, example: 1.0500 }
+    yb: { role: spot_at_observation, note: "filled on observation" }
+    da: { role: observation_date, example: "2026-06-18" }
+
+  FIXING:
+    ta: { role: pair, example: EURHKD }
+    tb: { role: instrument, example: NDF_FIX }
+    tc: { role: fixing_seq, example: F1 }
+    td: { role: denomination, example: ABS }
+    na: { role: months_from_trade, example: 3 }
+    ya: { role: fixing_rate, note: "null until fixed" }
+    yb: { role: notional, example: 1000000 }
+    yc: { role: settlement_amount, note: "computed after fixing" }
+    da: { role: fixing_date, example: "2026-06-18" }
+    db: { role: settlement_date, example: "2026-06-20" }
+    mkt_id: { role: fx_fix_ref, note: "wired when fixing publishes" }

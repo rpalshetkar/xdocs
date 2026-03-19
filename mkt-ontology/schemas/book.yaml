@@ -1,30 +1,35 @@
 # =============================================================================
-# BOOK - Trading books / portfolios within entities
+# BOOK — Trading book / portfolio
+# =============================================================================
+# Golden book_id + operational metadata + cross-system references.
+# A book can exist in multiple systems (OMS, risk, P&L, settlement)
+# with different codes — captured in xrefs[].
 # =============================================================================
 blueprint: schema
 kind: Book
 qualifier: "ftb-"
 xid: book_id|name
 xns: [id, xid]
-description: "Trading book / portfolio with desk, region, and risk limits"
+description: "Trading book / portfolio with desk classification, risk limits, and cross-system references"
 icon: briefcase
-extends: _system.yaml
-operation: MERGE
 
 sections:
   - name: identity
     label: "Book"
     icon: briefcase
+  - name: classification
+    label: "Classification"
+    icon: tag
   - name: limits
     label: "Limits"
     icon: shield
-    collapsible: true
     roles: [operations, risk, admin]
+  - name: xrefs_section
+    label: "System References"
+    icon: link
   - name: system
     label: "System"
     icon: settings
-    collapsible: true
-    default_open: false
 
 views:
   - type: table
@@ -50,14 +55,35 @@ views:
 
 model:
   fields:
-    book_id: { type: str, required: true, key: true, rank: hero, grid: "3", group: identity, col: "2<", placeholder: "BK-001" }
-    entity_id: { type: str, required: true, grid: "3", rank: primary, group: identity, widget: autocomplete, ref: entities.name }
-    name: { type: str, required: true, fuzzy: true, grid: "4", rank: hero, group: identity, card: title, col: "1<", placeholder: "FX Spot Book" }
-    desk: { type: str, facet: true, grid: "3", rank: primary, group: identity, card: subtitle, col: 3, placeholder: "FX Trading" }
-    region: { type: str, facet: true, grid: "3", group: identity, widget: select, enum: $enums.ENUM_REGION }
-    strategy: { type: str, facet: true, grid: "3", group: identity, placeholder: "Market Making" }
-    status: { type: str, facet: true, grid: "3", group: identity, card: badge, widget: select, enum: $enums.ENUM_BOOK_STATUS, col: 4, default: ACTIVE }
+    # ── Identity ──
+    book_id: { key: true, rank: hero, grid: "3", group: identity, col: "2<", placeholder: "BK-001" }
+    entity_id: { grid: "3", rank: primary, group: identity, ref: entities.name }
+    name: { fuzzy: true, grid: "4", rank: hero, group: identity, card: title, col: "1<", placeholder: "FX Spot Book" }
+    short_name: { grid: "3", group: identity }
+    status: { facet: true, grid: "3", group: identity, card: badge, enum: $enums.ENUM_BOOK_STATUS, col: 4, default: ACTIVE }
+    ccy: { facet: true, grid: "3", group: identity, enum: $enums.ENUM_CCY }
 
-    # Limits
-    ccy: { type: str, facet: true, grid: "4", group: limits, widget: select, enum: $enums.ENUM_CCY }
+    # ── Classification ──
+    desk: { facet: true, grid: "3", rank: primary, group: classification, card: subtitle, col: 3, placeholder: "FX Trading" }
+    region: { facet: true, grid: "3", group: classification, enum: $enums.ENUM_REGION }
+    strategy: { facet: true, grid: "3", group: classification, placeholder: "Market Making" }
+    book_type: { facet: true, grid: "3", group: classification, enum: $enums.ENUM_BOOK_TYPE }
+    regulatory_class: { grid: "3", group: classification, description: "FRTB classification" }
+
+    # ── Risk limits ──
     risk_limit: { type: float, grid: "4", group: limits, widget: ccy, description: "Maximum risk exposure (in book ccy)" }
+
+    # ── Cross-system references ──
+    systems: { type: list, grid: "6", group: xrefs_section, widget: tags, description: "Systems where this book exists" }
+    xrefs:
+      type: list
+      grid: "12"
+      group: xrefs_section
+      collapsed: true
+      description: "System-specific book identifiers"
+      items:
+        type: dict
+        items:
+          system: { grid: "4", description: "Source system (OMS, RISK, MUREX, CALYPSO...)" }
+          book_code: { grid: "4", description: "System-specific book identifier" }
+          status: { grid: "3", enum: [ACTIVE, MAPPED, STALE], default: ACTIVE }

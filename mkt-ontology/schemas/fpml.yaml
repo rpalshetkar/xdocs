@@ -8,8 +8,6 @@ xid: fpml_id|product_type
 xns: [id, xid]
 description: "ISDA FpML product template — defines leg structure and validation rules"
 icon: file-text
-extends: _system.yaml
-operation: MERGE
 
 sections:
   - name: identity
@@ -18,12 +16,9 @@ sections:
   - name: structure
     label: "Structure"
     icon: layers
-    collapsible: true
   - name: system
     label: "System"
     icon: settings
-    collapsible: true
-    default_open: false
 
 views:
   - type: table
@@ -38,12 +33,12 @@ views:
 
 model:
   fields:
-    fpml_id: { type: str, required: true, key: true, rank: hero, grid: "4", group: identity, col: "1<", placeholder: "FPML-FX-SPOT" }
-    product_type: { type: str, required: true, facet: true, grid: "4", rank: hero, group: identity, card: subtitle, widget: select, enum: $enums.ENUM_PRODUCT_TYPE, col: "2<" }
-    description: { type: str, grid: "4", group: identity, col: 3, placeholder: "FX Spot — T+2 delivery" }
+    fpml_id: { key: true, rank: hero, grid: "4", group: identity, col: "1<", placeholder: "FPML-FX-SPOT" }
+    product_type: { facet: true, grid: "4", rank: hero, group: identity, card: subtitle, enum: $enums.ENUM_PRODUCT_TYPE, col: "2<" }
+    description: { grid: "4", group: identity, col: 3, placeholder: "FX Spot — T+2 delivery" }
 
     # Structure
-    leg_types: { type: list, required: true, grid: "12", group: structure, widget: tags, description: "Required leg types for this product" }
+    leg_types: { type: list, grid: "12", group: structure, widget: tags, description: "Required leg types for this product" }
     required_fields: { type: dict, grid: "12", group: structure, collapsed: true, description: "Fields required per leg type" }
     validation_rules: { type: list, grid: "12", group: structure, collapsed: true, description: "Product-specific validation rules" }
     template: { type: dict, grid: "12", group: structure, collapsed: true, description: "Default template values for trade capture" }

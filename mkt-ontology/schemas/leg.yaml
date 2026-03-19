@@ -23,8 +23,6 @@ xid: leg_id
 xns: [id, xid]
 description: "Instrument-specific leg — economics, dates, product fields"
 icon: git-branch
-extends: _system.yaml
-operation: MERGE
 
 sections:
   - name: identity
@@ -36,24 +34,18 @@ sections:
   - name: fx
     label: "FX"
     icon: repeat
-    collapsible: true
   - name: dates
     label: "Dates"
     icon: calendar
-    collapsible: true
   - name: option
     label: "Option"
     icon: target
-    collapsible: true
   - name: delivery
     label: "Delivery & Clearing"
     icon: truck
-    collapsible: true
   - name: system
     label: "System"
     icon: settings
-    collapsible: true
-    default_open: false
 
 views:
   - type: table
@@ -69,43 +61,43 @@ views:
 model:
   fields:
     # ── Identity ──
-    leg_id: { type: str, required: true, key: true, rank: hero, grid: "3", group: identity, col: "2<", placeholder: "FTLG-001" }
-    txn_id: { type: str, required: true, grid: "3", rank: primary, group: identity, widget: autocomplete, ref: store_txns.txn_id }
-    leg_type: { type: str, required: true, facet: true, grid: "3", group: identity, widget: select, enum: $enums.ENUM_LEG_TYPE }
-    direction: { type: str, facet: true, grid: "3", group: identity, widget: select, enum: $enums.ENUM_DIRECTION }
-    description: { type: str, grid: "6", group: identity }
-    status: { type: str, facet: true, grid: "3", group: identity, card: badge, widget: select, enum: $enums.ENUM_LEG_STATUS, default: ACTIVE }
-    security_id: { type: str, grid: "3", group: identity, widget: autocomplete, ref: store_securities.name, description: "Instrument this leg is on" }
-    underlying_id: { type: str, grid: "3", group: identity, widget: autocomplete, ref: store_securities.name, description: "Underlying (options, TRS, CDS)" }
+    leg_id: { key: true, rank: hero, grid: "3", group: identity, col: "2<", placeholder: "FTLG-001" }
+    txn_id: { grid: "3", rank: primary, group: identity, ref: txns.txn_id }
+    leg_type: { facet: true, grid: "3", group: identity, enum: $enums.ENUM_LEG_TYPE }
+    direction: { facet: true, grid: "3", group: identity, enum: $enums.ENUM_DIRECTION }
+    description: { grid: "6", group: identity }
+    status: { facet: true, grid: "3", group: identity, card: badge, enum: $enums.ENUM_LEG_STATUS, default: ACTIVE }
+    security_id: { grid: "3", group: identity, ref: instruments.name, description: "Instrument this leg is on" }
+    underlying_id: { grid: "3", group: identity, ref: instruments.name, description: "Underlying (options, TRS, CDS)" }
 
     # ── Economics ──
     notional: { type: float, grid: "3", group: economics, widget: ccy }
     quantity: { type: float, grid: "3", group: economics }
-    ccy: { type: str, grid: "3", group: economics, widget: select, enum: $enums.ENUM_CCY }
+    ccy: { grid: "3", group: economics, enum: $enums.ENUM_CCY }
     rate: { type: float, grid: "3", group: economics, description: "Fixed rate, coupon, repo rate, or premium rate" }
-    benchmark: { type: str, grid: "3", group: economics, description: "SOFR, EURIBOR, SONIA (null if fixed)" }
+    benchmark: { grid: "3", group: economics, description: "SOFR, EURIBOR, SONIA (null if fixed)" }
     spread_bps: { type: float, grid: "3", group: economics, description: "Spread over benchmark in basis points" }
     price: { type: float, grid: "3", group: economics }
     yield_val: { type: float, grid: "3", group: economics, description: "Yield to maturity" }
 
     # ── FX ──
-    ccy_pair: { type: str, grid: "3", group: fx, description: "EURUSD, USDJPY (null for non-FX)" }
+    ccy_pair: { grid: "3", group: fx, description: "EURUSD, USDJPY (null for non-FX)" }
     fwd_points: { type: float, grid: "3", group: fx }
 
     # ── Dates ──
-    effective_date: { type: str, grid: "3", group: dates }
-    maturity_date: { type: str, grid: "3", group: dates }
-    fixing_date: { type: str, grid: "3", group: dates, description: "NDF fixing, rate reset, option expiry" }
-    day_count: { type: str, grid: "3", group: dates, widget: select, enum: $enums.ENUM_DAY_COUNT }
-    frequency: { type: str, grid: "3", group: dates, description: "Coupon, fixing, or payment frequency" }
+    effective_date: { grid: "3", group: dates }
+    maturity_date: { grid: "3", group: dates }
+    fixing_date: { grid: "3", group: dates, description: "NDF fixing, rate reset, option expiry" }
+    day_count: { grid: "3", group: dates, enum: $enums.ENUM_DAY_COUNT }
+    frequency: { grid: "3", group: dates, description: "Coupon, fixing, or payment frequency" }
 
     # ── Option / Cancellable ──
     strike: { type: float, grid: "3", group: option }
-    exercise_style: { type: str, grid: "3", group: option, widget: select, enum: $enums.ENUM_EXERCISE_STYLE }
+    exercise_style: { grid: "3", group: option, enum: $enums.ENUM_EXERCISE_STYLE }
     call_schedule: { type: list, grid: "6", group: option, widget: tags, description: "Exercise/cancel dates" }
 
     # ── Delivery & Clearing ──
     is_ndf: { type: bool, grid: "3", group: delivery, default: false, description: "Non-deliverable" }
     is_cleared: { type: bool, grid: "3", group: delivery, default: false, description: "CCP cleared" }
-    ccp: { type: str, grid: "3", group: delivery, description: "LCH, CME, JSCC..." }
-    contract: { type: str, grid: "3", group: delivery, description: "Futures contract code (ZN, ZB, RX...)" }
+    ccp: { grid: "3", group: delivery, description: "LCH, CME, JSCC..." }
+    contract: { grid: "3", group: delivery, description: "Futures contract code (ZN, ZB, RX...)" }

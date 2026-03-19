@@ -1,0 +1,112 @@
+# =============================================================================
+# DIARY — Trade cashflow diary, fixings, barriers, exercises
+# =============================================================================
+# Same axis convention as mkt/measure. Schedule_type determines axis semantics.
+# See _axis_defs.yaml for what each axis means per type.
+#
+# Unlike mkt/measure: no snap/as_of_date. Diary rows have a lifecycle
+# (status updates in place as fixings publish, exercises happen, barriers breach).
+#
+# Two IDs:
+#   schedule_id  = UUID (system-generated) — primary key
+#   schedule_key = {ta}.{tb}.{tc}         — natural composite key
+#   unique       = (schedule_key, txn_id, leg_id)
+#
+# Examples (schedule_key):
+#   USD.FIXED_COUPON.P3         — fixed coupon period 3
+#   USD.FLOAT_SOFR.R3           — SOFR floating reset period 3
+#   USD.PRINCIPAL.X1            — principal exchange (xccy/amort)
+#   USD.BERMUDAN.E3             — Bermudan exercise window 3
+#   EURUSD.BARRIER_KO.B1        — knock-out barrier observation 1
+#   EURHKD.NDF_FIX.F1           — NDF fixing 1
+#
+# Lifecycle:
+#   COUPON:    SCHEDULED → PAID
+#   RESET:     PENDING → FIXED → PAID         (mkt_id wired on FIXED)
+#   PRINCIPAL: SCHEDULED → PAID
+#   EXERCISE:  OPEN → EXERCISED / EXPIRED
+#   BARRIER:   MONITORING → BREACHED / EXPIRED (mkt_id wired on BREACHED)
+#   FIXING:    PENDING → FIXED → SETTLED       (mkt_id wired on FIXED)
+#
+# Axis roles (same as mkt/measure):
+#   [KEY]    ta, tb, tc     — text identity
+#   [DIM]    na, nb         — numeric dimensions
+#   [VALUE]  ya, yb, yc     — amounts, rates, levels
+#   [META]   td, da, db     — denomination, dates
+# =============================================================================
+blueprint: schema
+kind: Diary
+qualifier: "ftsc-"
+xid: schedule_id
+xns: [id, xid]
+description: "Trade cashflow diary — coupons, resets, fixings, barriers, exercises"
+icon: calendar
+
+sections:
+  - name: identity
+    label: "Diary"
+    icon: calendar
+  - name: refs
+    label: "References"
+    icon: link
+  - name: dimensions
+    label: "Dimensions"
+    icon: hash
+  - name: values
+    label: "Values"
+    icon: activity
+  - name: meta
+    label: "Meta"
+    icon: info
+  - name: system
+    label: "System"
+    icon: settings
+
+views:
+  - type: table
+    label: "Diary Grid"
+    icon: table
+    default: true
+  - type: kanban
+    label: "By Status"
+    icon: columns
+    group_by: status
+    title: schedule_key
+    subtitle: schedule_type
+  - type: bar
+    label: "By Type"
+    icon: bar-chart
+    x: schedule_type
+    y: $count
+
+model:
+  fields:
+    # ── Identity ──
+    schedule_id:       { key: true, rank: hero, grid: "3", group: identity, col: "2<", description: "UUID — primary key" }
+    schedule_key:      { grid: "4", group: identity, description: "Natural key: {ta}.{tb}.{tc}" }
+    schedule_type:     { facet: true, grid: "3", rank: primary, group: identity, enum: $enums.ENUM_SCHEDULE_TYPE }
+    status:            { facet: true, grid: "2", group: identity, enum: $enums.ENUM_STORE_SCHEDULE_STATUS, default: SCHEDULED }
+
+    # ── FK References ──
+    txn_id:  { grid: "3", group: refs, ref: txns.txn_id }
+    leg_id:  { grid: "3", group: refs, ref: legs.leg_id }
+    mkt_id:  { grid: "3", group: refs, ref: mkts.mkt_id, description: "Market data ref — wired when fixing/barrier triggers" }
+
+    # ── [KEY] Text axes — form schedule_key: {ta}.{tb}.{tc} ──
+    ta:  { facet: true, grid: "3", group: identity, description: "[KEY] Currency or pair (USD, EURUSD, EURHKD)" }
+    tb:  { facet: true, grid: "3", group: identity, description: "[KEY] Type detail (FIXED_COUPON, FLOAT_SOFR, BERMUDAN, BARRIER_KO, NDF_FIX)" }
+    tc:  { grid: "3", group: identity, description: "[KEY] Sequence (P1, R3, X1, E3, B1, F1)" }
+
+    # ── [DIM] Numeric dimensions ──
+    na:  { type: float, grid: "3", group: dimensions, description: "[DIM] Months from effective (sort order)" }
+    nb:  { type: float, grid: "3", group: dimensions, description: "[DIM] Secondary (remaining swap tenor, barrier distance)" }
+
+    # ── [VALUE] Amounts, rates, levels ──
+    ya:  { type: float, grid: "3", group: values, description: "[VALUE] Primary (coupon amount, fixed rate, barrier level, strike)" }
+    yb:  { type: float, grid: "3", group: values, description: "[VALUE] Secondary (period notional, spot at observation)" }
+    yc:  { type: float, grid: "3", group: values, description: "[VALUE] Tertiary (cashflow amount — computed after fixing)" }
+
+    # ── [META] Descriptors ──
+    td:  { grid: "3", group: meta, enum: $enums.ENUM_DENOMINATION, description: "[META] Denomination of ya (ABS, BPS, PCT)" }
+    da:  { grid: "3", group: meta, description: "[META] Pay / fixing / exercise / observation date" }
+    db:  { grid: "3", group: meta, description: "[META] Accrual start / period start" }

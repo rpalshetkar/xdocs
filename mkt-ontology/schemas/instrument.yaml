@@ -1,0 +1,95 @@
+# =============================================================================
+# INSTRUMENT — Instrument master with two-tier identifiers
+# =============================================================================
+# Static instrument reference data. Golden canonical IDs (ids{}) for fast
+# lookup, plus N×M cross-references (xrefs[]) for multi-source reconciliation.
+# Product-specific terms handled via overlays.
+# =============================================================================
+blueprint: schema
+kind: Instrument
+qualifier: "ftsc-"
+xid: security_id|name
+xns: [id, xid]
+description: "Instrument master — identifiers, classification, and static terms"
+icon: key
+
+sections:
+  - name: identity
+    label: "Instrument"
+    icon: key
+  - name: identifiers
+    label: "Identifiers"
+    icon: hash
+  - name: terms
+    label: "Terms"
+    icon: file-text
+  - name: system
+    label: "System"
+    icon: settings
+
+views:
+  - type: table
+    label: "Instrument Grid"
+    icon: table
+    default: true
+  - type: card
+    label: "Instrument Cards"
+    icon: layout-grid
+    title: name
+    subtitle: security_type
+    badge: status
+
+model:
+  fields:
+    # ── Identity ──
+    security_id: { key: true, rank: hero, grid: "3", group: identity, col: "2<", placeholder: "FTSC-001" }
+    name: { fuzzy: true, grid: "4", rank: hero, group: identity, card: title, col: "1<" }
+    short_name: { grid: "3", group: identity }
+    security_type: { facet: true, grid: "3", rank: primary, group: identity, enum: $enums.ENUM_SECURITY_TYPE }
+    product_type: { facet: true, grid: "3", rank: primary, group: identity, enum: $enums.ENUM_PRODUCT_TYPE }
+    status: { facet: true, grid: "3", group: identity, card: badge, enum: $enums.ENUM_SECURITY_STATUS, col: 4, default: ACTIVE }
+
+    # ── Tier 1: Golden canonical IDs ──
+    ids:
+      type: dict
+      grid: "12"
+      group: identifiers
+      description: "Golden canonical identifiers — one authoritative value per type"
+      items:
+        isin: { grid: "4", description: "ISO 6166 ISIN", placeholder: "US0378331005" }
+        cusip: { grid: "4", description: "CUSIP (N. America)", placeholder: "037833100" }
+        sedol: { grid: "4", description: "SEDOL (UK)" }
+        figi: { grid: "4", description: "OpenFIGI (12-char)", placeholder: "BBG000B9XRY4" }
+        ticker: { grid: "4", description: "Primary display ticker" }
+        cfi_code: { grid: "3", description: "Classification of Financial Instruments (ISO 10962)" }
+        mic: { grid: "3", description: "Primary market MIC (ISO 10383)", placeholder: "XNGS" }
+        ric: { grid: "3", description: "Reuters Instrument Code" }
+
+    # ── Tier 2: Cross-references ──
+    xrefs:
+      type: list
+      grid: "12"
+      group: identifiers
+      collapsed: true
+      description: "Multi-source cross-referenced identifiers"
+      items:
+        type: dict
+        items:
+          id_type: { grid: "3", enum: [ISIN, CUSIP, SEDOL, FIGI, TICKER, RIC, WKN, LEI, UTI, USI, UPI, RED, CLIP, INTERNAL, CUSTOM], description: "Identifier type/namespace" }
+          value: { grid: "4", description: "Identifier value" }
+          source: { grid: "3", enum: [BLOOMBERG, REFINITIV, ICE, MARKIT, CME, EUREX, OPENFIGI, EXCHANGE, INTERNAL, MANUAL], description: "Data source" }
+          source_system: { grid: "3", description: "Specific feed (e.g., B-PIPE, ELEKTRON)" }
+          venue_mic: { grid: "3", description: "Venue MIC (null = universal)" }
+          is_golden: { type: bool, grid: "2", default: false, description: "Authoritative value for this id_type" }
+          priority: { type: int, grid: "2", default: 0, description: "Source priority (higher = more trusted)" }
+          status: { grid: "2", enum: [ACTIVE, STALE, SUPERSEDED, DISPUTED], default: ACTIVE }
+          effective_from: { grid: "3", description: "When mapping became valid (ISO 8601)" }
+          effective_to: { grid: "3", description: "When mapping was superseded" }
+
+    # ── Terms ──
+    ccy: { facet: true, grid: "3", group: terms, enum: $enums.ENUM_CCY }
+    issue_date: { grid: "3", group: terms }
+    maturity_date: { grid: "3", group: terms }
+    issuer_id: { grid: "3", group: terms, ref: entities.name, description: "Issuing entity" }
+    country: { grid: "3", group: terms }
+    sector: { grid: "3", group: terms }

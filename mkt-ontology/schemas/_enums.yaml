@@ -192,6 +192,27 @@ enums:
     - { value: PAID, color: green }
     - { value: CANCELLED, color: red }
 
+  # Store schedule types (for store/schedule.yaml)
+  ENUM_SCHEDULE_TYPE:
+    - { value: COUPON, label: "Coupon", icon: dollar-sign }
+    - { value: RESET, label: "Rate Reset", icon: refresh-cw }
+    - { value: PRINCIPAL, label: "Principal Exchange", icon: dollar-sign }
+    - { value: EXERCISE, label: "Exercise Window", icon: play }
+    - { value: BARRIER, label: "Barrier Observation", icon: alert-triangle }
+    - { value: FIXING, label: "NDF/Option Fixing", icon: crosshair }
+
+  ENUM_STORE_SCHEDULE_STATUS:
+    - { value: SCHEDULED, color: blue, icon: clock }
+    - { value: PENDING, color: amber, icon: clock, description: "Awaiting fixing/observation" }
+    - { value: FIXED, color: green, icon: check, description: "Rate/level determined" }
+    - { value: PAID, color: green, icon: check-square }
+    - { value: SETTLED, color: green, icon: check-square }
+    - { value: EXERCISED, color: blue, icon: play }
+    - { value: BREACHED, color: red, icon: alert-octagon }
+    - { value: MONITORING, color: cyan, icon: radio, description: "Barrier actively observed" }
+    - { value: EXPIRED, color: grey, icon: clock }
+    - { value: CANCELLED, color: red, icon: x-circle }
+
   # ===========================================================================
   # MATCHING ENUMS
   # ===========================================================================
@@ -233,6 +254,8 @@ enums:
   # ===========================================================================
   ENUM_METRIC:
     - { value: MTM, label: "Mark-to-Market", icon: dollar-sign }
+    - { value: NAV, label: "Net Asset Value", icon: briefcase }
+    - { value: PNL, label: "P&L", icon: trending-up }
     - { value: DV01, label: "DV01", icon: trending-up }
     - { value: FXDELTA, label: "FX Delta", icon: activity }
     - { value: FXVEGA, label: "FX Vega", icon: activity }
@@ -241,6 +264,27 @@ enums:
     - { value: THETA, icon: clock }
     - { value: GAMMA, icon: zap }
     - { value: RHO, icon: percent }
+    - { value: TBO1, label: "Tenor Basis 01", icon: git-branch, description: "Sensitivity to 1bp change in tenor basis spread" }
+    - { value: CORR, label: "Correlation Risk", icon: git-merge }
+    # Schedule-derived (sparse — next/prev/milestone/monitor)
+    - { value: NEXT_COUPON, label: "Next Coupon", icon: dollar-sign, color: blue }
+    - { value: NEXT_RESET, label: "Next Reset", icon: refresh-cw, color: blue }
+    - { value: NEXT_EXERCISE, label: "Next Exercise", icon: play, color: blue }
+    - { value: NEXT_CALL, label: "Next Call", icon: phone, color: blue }
+    - { value: NEXT_PRINCIPAL, label: "Next Principal", icon: dollar-sign, color: blue }
+    - { value: NEXT_FIXING, label: "Next Fixing", icon: crosshair, color: blue }
+    - { value: NEXT_ROLL, label: "Next Roll", icon: refresh-cw, color: blue }
+    - { value: NEXT_PAYMENT, label: "Next Payment", icon: dollar-sign, color: blue }
+    - { value: PREV_COUPON, label: "Prev Coupon", icon: dollar-sign, color: grey }
+    - { value: PREV_RESET, label: "Prev Reset", icon: refresh-cw, color: grey }
+    - { value: PREV_FIXING, label: "Prev Fixing", icon: crosshair, color: grey }
+    - { value: MATURITY, label: "Maturity", icon: flag }
+    - { value: EFFECTIVE, label: "Effective Date", icon: calendar }
+    - { value: FIRST_CALL, label: "First Call", icon: phone }
+    - { value: BARRIER_KI, label: "Knock-In", icon: alert-triangle, color: amber }
+    - { value: BARRIER_KO, label: "Knock-Out", icon: alert-octagon, color: red }
+    - { value: TRIGGER, label: "Trigger Level", icon: crosshair, color: amber }
+    - { value: ACCRUED, label: "Accrued Interest", icon: percent }
 
   ENUM_TENOR_BUCKET:
     - { value: 1M, label: "1 Month" }
@@ -652,17 +696,25 @@ enums:
     - { value: CALLED, color: amber }
     - { value: DEFAULTED, color: red }
 
+  ENUM_SNAP:
+    - { value: SOD, label: "Start of Day", icon: sunrise, description: "Previous EOD carried forward as opening reference" }
+    - { value: LIVE, label: "Live", icon: radio, color: green, description: "Real-time current value" }
+    - { value: FLASH, label: "Flash", icon: zap, color: amber, description: "Intraday flash estimate" }
+    - { value: FLASH3PM, label: "Flash 3PM", icon: clock, color: amber, description: "Pre-close flash at 3PM" }
+    - { value: EOD, label: "End of Day", icon: sunset, color: blue, description: "Official close, fully reconciled" }
+
   ENUM_DENOMINATION:
-    - { value: ABSOLUTE, label: "Absolute" }
+    - { value: ABS, label: "Absolute" }
     - { value: BPS, label: "Basis Points" }
     - { value: PCT, label: "Percent" }
-    - { value: RATIO, label: "Ratio" }
 
   ENUM_OBSERVATION_TYPE:
     - { value: PRICE, icon: dollar-sign }
     - { value: RATE_FIX, label: "Rate Fixing", icon: crosshair }
-    - { value: CURVE_POINT, label: "Curve Point", icon: trending-up }
-    - { value: SPREAD, icon: percent }
+    - { value: CURVE_POINT, label: "Curve Point", icon: trending-up, description: "Single-tenor: x=maturity" }
+    - { value: FRA, label: "FRA Rate", icon: trending-up, description: "Two-tenor forward: x=start, y=end (e.g., 1Mx3M)" }
+    - { value: IMM_FUT, label: "IMM Future", icon: trending-up, description: "Futures implied rate: tx=contract, ty=IMM code, dx=expiry" }
+    - { value: SPREAD, icon: percent, description: "Basis/credit spread between two references" }
     - { value: VOL_SURFACE, label: "Vol Surface", icon: activity }
     - { value: INDEX, icon: bar-chart }
 

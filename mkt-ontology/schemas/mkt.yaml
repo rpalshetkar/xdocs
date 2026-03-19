@@ -1,0 +1,98 @@
+# =============================================================================
+# MKT — Market data observations
+# =============================================================================
+# A curve is built from heterogeneous instruments in one dataset:
+#   DEPO, IMM_FUT, FRA, SWAP, XCCY, TENOR_BASIS, FX, VOL, SABR, PRICE...
+#
+# Two IDs:
+#   mkt_id  = UUID (system-generated) — FK target for measure.mkt_id
+#   mkt_key = {ta}.{tb}.{tc}         — natural composite key, human-readable
+#   unique  = (mkt_key, snap, as_of)  — one observation per point per snap per day
+#
+# Examples (mkt_key):
+#   USD.SOFR_DEPO.ON            — SOFR overnight deposit
+#   USD.SOFR_SWAP.5Y            — 5Y SOFR swap rate
+#   USD.SOFR_FRA.1Mx3M          — 1M×3M SOFR forward
+#   USD.SOFR_IMM.M6             — Jun26 SOFR IMM future
+#   EURUSD.FX_SPOT.SPOT         — EUR/USD spot
+#   EURUSD.FX_FWD.3M            — EUR/USD 3M forward
+#   EURUSD.FX_SWAP.1Mx3M        — EUR/USD 1M×3M FX swap
+#   EURUSD.XCCY_SWAP.5Y         — EUR/USD 5Y xccy basis
+#   USD.SOFR_3M6M_BASIS.5Y      — SOFR 3M/6M tenor basis 5Y
+#   USD.BOND_PRICE.UST4536_MID  — UST 4.5% 02/36 mid price
+#   EURUSD.FX_VOL.3M_25D_P      — 3M 25-delta put vol
+#   USD.IR_SWPNVOL.5Yx10Y_ATM   — 5Y×10Y ATM swaption normal vol
+#   USD.IR_SABR.5Yx10Y_ALPHA    — SABR alpha for 5Y×10Y
+#   EURUSD_USDJPY.CORR.1Y       — 1Y rolling correlation
+#
+# Axis roles:
+#   [KEY]    ta, tb, tc   — text identity (ccy, curve_instrument, point)
+#   [DIM]    na, nb       — numeric dimensions (months sort, secondary sort)
+#   [VALUE]  ya, yb, yc   — observed values (primary, secondary, tertiary)
+#   [META]   td           — denomination (ABS, BPS, PCT)
+#   [META]   da, db       — dates (end/maturity, start — NOT in key)
+# =============================================================================
+blueprint: schema
+kind: Mkt
+qualifier: "ftmk-"
+xid: mkt_id
+xns: [id, xid]
+description: "Market data observations — curves, prices, fixings, vol surfaces"
+icon: trending-up
+
+sections:
+  - name: identity
+    label: "Observation"
+    icon: trending-up
+  - name: dimensions
+    label: "Dimensions"
+    icon: hash
+  - name: values
+    label: "Values"
+    icon: activity
+  - name: meta
+    label: "Meta"
+    icon: info
+  - name: system
+    label: "System"
+    icon: settings
+
+views:
+  - type: table
+    label: "Market Data Grid"
+    icon: table
+    default: true
+  - type: bar
+    label: "By Segment"
+    icon: bar-chart
+    x: tb
+    y: $count
+
+model:
+  fields:
+    # ── Identity ──
+    mkt_id:            { key: true, rank: hero, grid: "3", group: identity, col: "2<", description: "UUID — FK target for measures" }
+    mkt_key:           { grid: "4", group: identity, description: "Natural key: {ta}.{tb}.{tc} — unique with (snap, as_of_date)" }
+    observation_type:  { facet: true, grid: "3", rank: primary, group: identity, enum: $enums.ENUM_OBSERVATION_TYPE }
+    snap:              { facet: true, grid: "2", group: identity, enum: $enums.ENUM_SNAP, default: EOD }
+    as_of_date:        { grid: "3", group: identity, description: "Business date" }
+    source:            { facet: true, grid: "3", group: identity, enum: $enums.ENUM_SOURCE_TYPE }
+
+    # ── [KEY] Text axes — form mkt_key: {ta}.{tb}.{tc} ──
+    ta:  { facet: true, grid: "3", group: identity, description: "[KEY] Currency or pair (USD, EURUSD, EURUSD_USDJPY)" }
+    tb:  { facet: true, grid: "3", group: identity, description: "[KEY] Curve + instrument (SOFR_DEPO, SOFR_SWAP, FX_SPOT, IR_SABR, CORR)" }
+    tc:  { grid: "3", group: identity, description: "[KEY] Point label (ON, 5Y, M6, 1Mx3M, 3M_25D_P, 5Yx10Y_ATM)" }
+
+    # ── [DIM] Numeric dimensions — sorting and filtering ──
+    na:  { type: float, grid: "3", group: dimensions, description: "[DIM] Sort order (months to maturity/end/expiry)" }
+    nb:  { type: float, grid: "3", group: dimensions, description: "[DIM] Secondary (months to start, delta, swap tenor months)" }
+
+    # ── [VALUE] Observed values ──
+    ya:  { type: float, grid: "3", group: values, description: "[VALUE] Primary (rate, price, spread, vol, param)" }
+    yb:  { type: float, grid: "3", group: values, description: "[VALUE] Secondary (implied rate, near points, accrued)" }
+    yc:  { type: float, grid: "3", group: values, description: "[VALUE] Tertiary (spot reference, dirty price)" }
+
+    # ── [META] Descriptors ──
+    td:  { grid: "3", group: meta, enum: $enums.ENUM_DENOMINATION, description: "[META] Denomination of ya (ABS, BPS, PCT)" }
+    da:  { grid: "3", group: meta, description: "[META] End date / maturity / expiry" }
+    db:  { grid: "3", group: meta, description: "[META] Start date (FRA, fwd-starting, option expiry — null for spot)" }

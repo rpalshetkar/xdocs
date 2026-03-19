@@ -1,0 +1,97 @@
+# =============================================================================
+# MEASURE — Risk metrics, P&L, valuations, schedules
+# =============================================================================
+# Same axis convention as mkt. Metric type determines axis semantics.
+# See _axis_defs.yaml for what each axis means per metric.
+#
+# Two IDs:
+#   measure_id  = UUID (system-generated) — primary key
+#   measure_key = {ta}.{tb}.{tc}         — natural composite key
+#   unique      = (measure_key, snap, as_of_date, txn_id, leg_id)
+#
+# Examples (measure_key):
+#   USD.SOFR.5Y                  — DV01 at 5Y SOFR bucket
+#   EURUSD.EURHKD.               — FX delta (EUR/USD factor of EUR/HKD cross)
+#   USD.FX_SPOT_NY.              — NAV for book
+#   USD.FIXED.P3                 — coupon payment period 3
+#   USD.FLOAT_SOFR.R3            — rate reset period 3
+#   USD.BERMUDAN.E3              — exercise window 3
+#
+# Axis roles (same as mkt):
+#   [KEY]    ta, tb, tc     — text identity
+#   [DIM]    na, nb         — numeric dimensions (months sort, secondary)
+#   [VALUE]  ya, yb, yc     — computed/scheduled values
+#   [META]   td, da, db     — denomination, dates
+# =============================================================================
+blueprint: schema
+kind: Measure
+qualifier: "ftms-"
+xid: measure_id
+xns: [id, xid]
+description: "Risk metrics, P&L, valuations, and trade schedules"
+icon: activity
+
+sections:
+  - name: identity
+    label: "Measure"
+    icon: activity
+  - name: refs
+    label: "References"
+    icon: link
+  - name: dimensions
+    label: "Dimensions"
+    icon: hash
+  - name: values
+    label: "Values"
+    icon: activity
+  - name: meta
+    label: "Meta"
+    icon: info
+  - name: system
+    label: "System"
+    icon: settings
+
+views:
+  - type: table
+    label: "Measure Grid"
+    icon: table
+    default: true
+  - type: bar
+    label: "By Metric"
+    icon: bar-chart
+    x: metric
+    y: $count
+
+model:
+  fields:
+    # ── Identity ──
+    measure_id:        { key: true, rank: hero, grid: "3", group: identity, col: "2<", description: "UUID — primary key" }
+    measure_key:       { grid: "4", group: identity, description: "Natural key: {ta}.{tb}.{tc}" }
+    metric:            { facet: true, grid: "3", rank: primary, group: identity, enum: $enums.ENUM_METRIC }
+    snap:              { facet: true, grid: "2", group: identity, enum: $enums.ENUM_SNAP, default: EOD }
+    as_of_date:        { grid: "3", group: identity, description: "Business date" }
+    source:            { facet: true, grid: "3", group: identity, enum: $enums.ENUM_SOURCE_TYPE, description: "Risk engine / schedule generator" }
+
+    # ── FK References ──
+    txn_id:  { grid: "3", group: refs, ref: txns.txn_id, description: "Transaction (null for book-level measures)" }
+    leg_id:  { grid: "3", group: refs, ref: legs.leg_id, description: "Leg (null for txn-level or book-level)" }
+    mkt_id:  { grid: "3", group: refs, ref: mkts.mkt_id, description: "Market data point used for valuation / fixing ref" }
+
+    # ── [KEY] Text axes — form measure_key: {ta}.{tb}.{tc} ──
+    ta:  { facet: true, grid: "3", group: identity, description: "[KEY] Currency, pair, or factor (USD, EURUSD, EURUSD_USDJPY)" }
+    tb:  { facet: true, grid: "3", group: identity, description: "[KEY] Curve, leg type, book, factor2 (SOFR, FIXED, FX_SPOT_NY)" }
+    tc:  { grid: "3", group: identity, description: "[KEY] Label, tenor, sequence (5Y, P3, R3, E3)" }
+
+    # ── [DIM] Numeric dimensions ──
+    na:  { type: float, grid: "3", group: dimensions, description: "[DIM] Months (to maturity, from effective, to exercise)" }
+    nb:  { type: float, grid: "3", group: dimensions, description: "[DIM] Secondary (months to start, remaining swap tenor)" }
+
+    # ── [VALUE] Computed / scheduled values ──
+    ya:  { type: float, grid: "3", group: values, description: "[VALUE] Primary (sensitivity, amount, rate, mark)" }
+    yb:  { type: float, grid: "3", group: values, description: "[VALUE] Secondary (notional, implied vol, near points)" }
+    yc:  { type: float, grid: "3", group: values, description: "[VALUE] Tertiary (cashflow amount, dirty price)" }
+
+    # ── [META] Descriptors ──
+    td:  { grid: "3", group: meta, enum: $enums.ENUM_DENOMINATION, description: "[META] Denomination of ya (ABS, BPS, PCT)" }
+    da:  { grid: "3", group: meta, description: "[META] End / pay / fixing / exercise date" }
+    db:  { grid: "3", group: meta, description: "[META] Start / accrual start / swap maturity" }
