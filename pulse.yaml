@@ -1,22 +1,111 @@
-# pulse.yaml — XDS External Documentation
+# pulse.yaml — XDS External Documentation (mkt-ontology)
 
 version: "1.0"
 repo: xdocs
 
 golden:
-  ontology_content:
+  # Core YAML schemas — the ontology's source of truth
+  schemas:
+    glob: "mkt-ontology/schemas/*.yaml"
+
+  # Schema building blocks
+  partials:
+    glob: "mkt-ontology/schemas/_partials/*.yaml"
+
+  # Asset-class overlays
+  overlays:
+    glob: "mkt-ontology/schemas/_overlays/*.yaml"
+
+  # Event payload schemas
+  event_payloads:
+    glob: "mkt-ontology/schemas/_event_payloads/*.yaml"
+
+  # Shared schema definitions (enums, axes, system fields, bloomberg map)
+  schema_defs:
     glob:
-      - "mkt-ontology/ARCH.md"
-      - "mkt-ontology/PRD.md"
-      - "mkt-ontology/PROMPT.md"
-      - "mkt-ontology/SCENARIO.md"
-      - "mkt-ontology/UIX.md"
+      - "mkt-ontology/schemas/_enums.yaml"
+      - "mkt-ontology/schemas/_axis_defs.yaml"
+      - "mkt-ontology/schemas/_system.yaml"
+      - "mkt-ontology/schemas/_bloomberg_map.yaml"
+
+  # Domain config — assembly, domain, ontology, settings
+  domain_config:
+    glob:
+      - "mkt-ontology/assembly.yaml"
+      - "mkt-ontology/domain.yaml"
+      - "mkt-ontology/ontology.yaml"
+      - "mkt-ontology/settings.yaml"
+
+  # Pipeline definitions
+  pipelines:
+    glob: "mkt-ontology/pipelines/*.yaml"
+
+  # Server code (mock data, API)
+  server_code:
+    glob: "mkt-ontology/server/*.py"
 
 derived:
   readme:
     glob: "mkt-ontology/README.md"
     sources:
-      - ref: ontology_content
+      - ref: schemas
+      - ref: domain_config
+      - ref: server_code
+    heal: "manual"
+    auto_heal: false
+    tier: 1
+
+  arch:
+    glob: "mkt-ontology/ARCH.md"
+    sources:
+      - ref: schemas
+      - ref: partials
+      - ref: overlays
+      - ref: event_payloads
+      - ref: domain_config
+      - ref: pipelines
+    heal: "manual"
+    auto_heal: false
+    tier: 1
+
+  prd:
+    glob: "mkt-ontology/PRD.md"
+    sources:
+      - ref: schemas
+      - ref: domain_config
+    heal: "manual"
+    auto_heal: false
+    tier: 1
+
+  prompt:
+    glob: "mkt-ontology/PROMPT.md"
+    sources:
+      - ref: schemas
+      - ref: partials
+      - ref: overlays
+      - ref: event_payloads
+      - ref: schema_defs
+      - ref: pipelines
+    heal: "manual"
+    auto_heal: false
+    tier: 1
+
+  scenario:
+    glob: "mkt-ontology/SCENARIO.md"
+    sources:
+      - ref: schemas
+      - ref: event_payloads
+      - ref: pipelines
+    heal: "manual"
+    auto_heal: false
+    tier: 1
+
+  uix:
+    glob: "mkt-ontology/UIX.md"
+    sources:
+      - ref: schemas
+      - ref: overlays
+      - ref: domain_config
     heal: "manual"
     auto_heal: false
     tier: 1
