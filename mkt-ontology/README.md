@@ -1,16 +1,10 @@
 ---
 _pulse:
-  generated_at: '2026-03-17T02:25:50+00:00'
+  generated_at: '2026-03-28T14:10:49+00:00'
   sources:
-  - glob: domains/*/schemas/*.yaml
-    hash: 5d9c3458
-  - glob: domains/*/assembly.yaml
-    hash: 0edd546e
-  - glob: domains/*/ontology.yaml
-    hash: 7bef2011
-  - glob: domains/*/server/mock_data.py
-    hash: 2d3f4cba
-  commit: 7ae9077
+  - glob: mkt-ontology/ARCH.md,mkt-ontology/PRD.md,mkt-ontology/PROMPT.md,mkt-ontology/SCENARIO.md,mkt-ontology/UIX.md
+    hash: 096ae7c1
+  commit: b5bb61c
 ---
 
 # xftws — Fixed Income, Currencies & Commodities Trading

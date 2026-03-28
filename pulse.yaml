@@ -1,0 +1,24 @@
+# pulse.yaml — XDS External Documentation
+
+version: "1.0"
+repo: xdocs
+
+golden:
+  ontology_content:
+    glob:
+      - "mkt-ontology/ARCH.md"
+      - "mkt-ontology/PRD.md"
+      - "mkt-ontology/PROMPT.md"
+      - "mkt-ontology/SCENARIO.md"
+      - "mkt-ontology/UIX.md"
+
+derived:
+  readme:
+    glob: "mkt-ontology/README.md"
+    sources:
+      - ref: ontology_content
+    heal: "manual"
+    auto_heal: false
+    tier: 1
+
+repos: {}
