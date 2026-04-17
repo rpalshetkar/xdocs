@@ -1,31 +1,92 @@
 # =============================================================================
-# OVERLAY: OPTION — Listed & OTC options, barriers, strategies
+# OVERLAY: OPTION — Listed & OTC options, barriers, strategies, FX-option depth
 # =============================================================================
 blueprint: partial
-description: "Option overlay — strike, expiry, exercise, barrier, premium"
+description: "Option overlay — strike, expiry, exercise, barrier, FX-specific conventions"
 
 fields:
-  option_type:        { type: str, grid: "3", enum: [CALL, PUT, PAYER, RECEIVER], bbg: [PUT_CALL], description: "Call/Put" }
-  strike:             { type: float, grid: "3", bbg: [STRIKE_PX], description: "Strike/exercise price" }
-  expiry_date:        { type: date, grid: "3", bbg: [EXPIRE_DT], description: "Expiration date" }
-  exercise_style:     { type: str, grid: "3", enum: [EUROPEAN, AMERICAN, BERMUDAN], bbg: [OPT_STYLE], description: "Exercise style" }
-  contract_size:      { type: float, grid: "3", bbg: [OPT_CONT_SIZE], description: "Contract multiplier (e.g., 100)" }
+  # ── Basics ──
+  option_type:        { type: str, grid: "2", enum: [CALL, PUT, PAYER, RECEIVER], bbg: [PUT_CALL] }
+  strike:             { type: float, grid: "3", bbg: [STRIKE_PX] }
+  strike_style:       { type: str, grid: "3", enum: [ABSOLUTE, PCT_SPOT, PCT_FORWARD, DELTA, MONEYNESS], description: "How strike is specified (delta-style quotes => solve strike)" }
+  strike_delta:       { type: float, grid: "2", description: "Delta value if strike_style=DELTA (e.g., 25 for 25D)" }
+  expiry_date:        { type: date, grid: "3", bbg: [EXPIRE_DT] }
+  exercise_style:     { type: str, grid: "3", enum: [EUROPEAN, AMERICAN, BERMUDAN], bbg: [OPT_STYLE] }
+  contract_size:      { type: float, grid: "3", bbg: [OPT_CONT_SIZE], description: "Contract multiplier (listed: 100)" }
   settlement_type:    { type: str, grid: "3", enum: [PHYSICAL, CASH], description: "Settlement type" }
-  underlying_ref:     { type: str, grid: "4", description: "Reference to underlying instrument" }
-  # Premium
-  premium:            { type: float, grid: "3", description: "Option premium" }
-  premium_ccy:        { type: str, grid: "2", description: "Premium currency" }
-  premium_date:       { type: date, grid: "3", description: "Premium payment date" }
-  # Barrier (exotic)
-  barrier_type:       { type: str, grid: "3", enum: [KNOCK_IN, KNOCK_OUT, DOUBLE_KNOCK_IN, DOUBLE_KNOCK_OUT], description: "Barrier type" }
+  underlying_ref:     { type: str, grid: "4", description: "Ref to underlying instrument (security_id or fx_pair.symbol)" }
+
+  # ── Dates ──
+  trade_date:         { type: date, grid: "3" }
+  delivery_date:      { type: date, grid: "3", description: "Underlying delivery date (FX: expiry + spot offset)" }
+  payment_date:       { type: date, grid: "3", description: "Premium settlement date" }
+  cut_time:           { type: str, grid: "3", enum: $enums.ENUM_CUT_TIME, description: "Standardized expiry cut (NY 10:00, Tokyo 15:00, etc.)" }
+
+  # ── Premium ──
+  premium:            { type: float, grid: "3", description: "Option premium (in premium_ccy units)" }
+  premium_ccy:        { type: str, grid: "2", enum: $enums.ENUM_CCY }
+  premium_conv:       { type: str, grid: "3", enum: $enums.ENUM_PREMIUM_CONV, description: "Premium quote convention" }
+  premium_pct:        { type: float, grid: "2", description: "Premium in % (of foreign or domestic per premium_conv)" }
+  premium_pips:       { type: float, grid: "2", description: "Premium in pips (for FX)" }
+  premium_pct_notional: { type: float, grid: "3", description: "Computed: premium / notional × 100" }
+
+  # ── Volatility (at trade) ──
+  vol:                { type: float, grid: "3", description: "Implied vol at strike (%)" }
+  vol_quote_type:     { type: str, grid: "3", enum: $enums.ENUM_VOL_QUOTE_TYPE, default: LOGNORMAL }
+  atm_vol:            { type: float, grid: "3", description: "ATM vol reference" }
+  atm_type:           { type: str, grid: "3", enum: $enums.ENUM_ATM_TYPE, description: "ATM definition (DNS/ATMF/ATMS)" }
+  rr_25d:             { type: float, grid: "2", description: "25-delta Risk Reversal (%)" }
+  bf_25d:             { type: float, grid: "2", description: "25-delta Butterfly (%)" }
+  rr_10d:             { type: float, grid: "2", description: "10-delta Risk Reversal (%)" }
+  bf_10d:             { type: float, grid: "2", description: "10-delta Butterfly (%)" }
+
+  # ── Greeks (at trade) ──
+  delta:              { type: float, grid: "2", description: "Option delta (signed)" }
+  delta_conv:         { type: str, grid: "3", enum: $enums.ENUM_DELTA_CONV, description: "Delta convention used" }
+  gamma:              { type: float, grid: "2" }
+  vega:               { type: float, grid: "2" }
+  theta:              { type: float, grid: "2" }
+  rho:                { type: float, grid: "2" }
+  vanna:              { type: float, grid: "2", description: "∂Vega/∂Spot — smile sensitivity" }
+  volga:              { type: float, grid: "2", description: "∂Vega/∂Vol — vol-of-vol sensitivity" }
+
+  # ── Barrier (exotic) ──
+  barrier_type:       { type: str, grid: "3", enum: [KNOCK_IN, KNOCK_OUT, DOUBLE_KNOCK_IN, DOUBLE_KNOCK_OUT, ONE_TOUCH, NO_TOUCH, DOUBLE_ONE_TOUCH, DOUBLE_NO_TOUCH] }
   barrier_level:      { type: float, grid: "3", description: "Barrier trigger level" }
   barrier_upper:      { type: float, grid: "3", description: "Upper barrier (double barrier)" }
-  barrier_observation: { type: str, grid: "3", enum: [CONTINUOUS, DISCRETE], description: "Barrier monitoring" }
-  # Digital
+  barrier_lower:      { type: float, grid: "3", description: "Lower barrier (double barrier)" }
+  barrier_monitoring: { type: str, grid: "3", enum: $enums.ENUM_BARRIER_MONITORING, default: CONTINUOUS }
+  barrier_observation_source: { type: str, grid: "3", description: "Source for barrier monitoring (market/fix/dealer)" }
+  barrier_status:     { type: str, grid: "2", enum: [LIVE, MONITORING, BREACHED, EXPIRED_UNTOUCHED] }
+  barrier_breach_date: { type: date, grid: "3", description: "Date/time of barrier breach" }
+  rebate:             { type: float, grid: "3", description: "Rebate paid on KO / no-touch" }
+  rebate_ccy:         { type: str, grid: "2", enum: $enums.ENUM_CCY }
+
+  # ── Digital / Binary ──
   digital_payout:     { type: float, grid: "3", description: "Fixed payout (digital/binary)" }
-  # Strategy
-  strategy_type:      { type: str, grid: "3", enum: [STRADDLE, STRANGLE, RISK_REVERSAL, BUTTERFLY, COLLAR, SEAGULL, VERTICAL, CALENDAR, CONDOR, IRON_CONDOR], description: "Strategy type" }
+  digital_payout_ccy: { type: str, grid: "2", enum: $enums.ENUM_CCY }
+
+  # ── Strategy ──
+  strategy_type:      { type: str, grid: "3", enum: [STRADDLE, STRANGLE, RISK_REVERSAL, BUTTERFLY, COLLAR, SEAGULL, VERTICAL, CALENDAR, CONDOR, IRON_CONDOR, CALL_SPREAD, PUT_SPREAD, BACKSPREAD] }
   leg_count:          { type: int, grid: "2", description: "Number of legs in strategy" }
-  # FX-specific
-  cut_time:           { type: str, grid: "3", description: "NY Cut (10:00 ET), Tokyo Cut" }
-  delivery_date:      { type: date, grid: "3", description: "Currency delivery date (expiry+2)" }
+
+  # ── Pricing Model (for exotics / non-vanilla) ──
+  pricing_model:      { type: str, grid: "3", enum: $enums.ENUM_OPTION_PRICING_MODEL, description: "Model used at pricing" }
+  model_params:       { type: dict, grid: "6", collapsed: true, description: "Model-specific calibration params" }
+
+  # ── Exercise ──
+  exercise_event_id:  { type: str, grid: "3", description: "Event ID of EXERCISE_NOTICE (if exercised)" }
+  exercise_date:      { type: date, grid: "3" }
+  exercise_style_used: { type: str, grid: "3", enum: [EUROPEAN_AT_CUT, AMERICAN_EARLY, AUTOEXERCISE_ITM, NOT_EXERCISED] }
+
+  # ── FX-Specific (double-currency options, window options, etc.) ──
+  is_fx_option:       { type: bool, grid: "2", default: false, description: "FX option flag — enables FX-specific valuation" }
+  window_start_date:  { type: date, grid: "3", description: "Window-barrier observation start" }
+  window_end_date:    { type: date, grid: "3", description: "Window-barrier observation end" }
+  payoff_ccy:         { type: str, grid: "2", enum: $enums.ENUM_CCY, description: "Payoff currency (can differ from base/quote for quanto)" }
+  is_quanto:          { type: bool, grid: "2", default: false, description: "Quanto option (fixed-rate conversion)" }
+  quanto_rate:        { type: float, grid: "3", description: "Fixed quanto conversion rate" }
+
+  # ── Pin Risk & Auto-exercise ──
+  autoexercise_threshold_pct: { type: float, grid: "3", default: 0.01, description: "ITM % above which auto-exercise triggers" }
+  pin_risk_flag:      { type: bool, grid: "2", default: false, description: "Strike near current spot at expiry — manual review" }

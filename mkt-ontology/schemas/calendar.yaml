@@ -1,0 +1,113 @@
+# =============================================================================
+# CALENDAR — Holiday, business-day, fixing, exchange calendars
+# =============================================================================
+# One row per calendar source. Calendars are referenced by currencies, venues,
+# and fixing sources to resolve settlement dates, value dates, and fixing days.
+# Composite calendars (ccy-pair settlement = intersection of two single-ccy
+# calendars) are computed at query time — we store the atomic calendars here.
+# =============================================================================
+blueprint: schema
+kind: Calendar
+qualifier: "ftp-cal-"
+xid: cal_id|name
+xns: [id, xid]
+description: "Holiday / business-day / fixing / exchange calendars"
+icon: calendar
+
+sections:
+  - name: identity
+    label: "Calendar"
+    icon: calendar
+  - name: rules
+    label: "Rules"
+    icon: settings
+  - name: holidays
+    label: "Holidays"
+    icon: x-circle
+  - name: fixing
+    label: "Fixing"
+    icon: crosshair
+  - name: system
+    label: "System"
+    icon: settings
+
+views:
+  - type: table
+    label: "Calendar Grid"
+    icon: table
+    default: true
+  - type: card
+    label: "Calendar Cards"
+    icon: layout-grid
+    title: name
+    subtitle: cal_type
+    badge: ccy
+  - type: bar
+    label: "By Type"
+    icon: bar-chart
+    x: cal_type
+    y: $count
+
+model:
+  fields:
+    # ── Identity ──
+    cal_id: { key: true, rank: hero, grid: "3", group: identity, col: "2<", placeholder: "FTP-CAL-USD-SETTLEMENT" }
+    name: { fuzzy: true, grid: "5", rank: hero, group: identity, card: title, col: "1<", placeholder: "USD Settlement" }
+    short_name: { grid: "3", group: identity, placeholder: "NYC" }
+    cal_type: { facet: true, grid: "3", rank: primary, group: identity, card: subtitle, enum: $enums.ENUM_CALENDAR_TYPE }
+    ccy: { facet: true, grid: "2", rank: primary, group: identity, card: badge, enum: $enums.ENUM_CCY, description: "Primary currency (null for x-ccy)" }
+    mic: { grid: "2", group: identity, description: "Venue MIC if exchange calendar (ISO 10383)", placeholder: "XNYS" }
+    source: { facet: true, grid: "3", group: identity, enum: $enums.ENUM_FIXING_SOURCE, description: "Authoritative source (fixing calendars)" }
+
+    # ── Rules ──
+    tz: { grid: "3", group: rules, placeholder: "America/New_York", description: "IANA timezone for local cutoffs" }
+    weekend_rule: { grid: "3", group: rules, enum: $enums.ENUM_WEEKEND_RULE, default: SAT_SUN }
+    default_bd_conv: { grid: "3", group: rules, enum: $enums.ENUM_BUSINESS_DAY_CONV, default: MODIFIED_FOLLOWING, description: "Default business-day adjustment" }
+    spot_offset_days: { type: int, grid: "2", group: rules, default: 2, description: "T+N spot convention (0=T+0, 1=T+1, 2=T+2)" }
+    cutoff_local: { grid: "3", group: rules, placeholder: "17:00", description: "Daily cutoff (HH:MM local tz)" }
+    cls_session: { type: bool, grid: "2", group: rules, default: false, description: "Part of CLS settlement session" }
+
+    # ── Holidays ──
+    holidays:
+      type: list
+      grid: "12"
+      group: holidays
+      collapsed: true
+      description: "Non-business days for this calendar"
+      items:
+        type: dict
+        items:
+          date: { grid: "3", description: "ISO 8601 date (YYYY-MM-DD)" }
+          name: { grid: "5", description: "Holiday name" }
+          type: { grid: "2", enum: [BANK, EXCHANGE, SETTLEMENT, HALF_DAY, ONE_OFF], default: BANK }
+          early_close_local: { grid: "2", description: "Early-close time if HALF_DAY (HH:MM)" }
+
+    adjoining_calendars:
+      type: list
+      grid: "12"
+      group: holidays
+      widget: tags
+      description: "Related calendars to intersect for composite (e.g., USD+EUR for EURUSD)"
+
+    # ── Fixing ──
+    fixing_time_local: { grid: "3", group: fixing, placeholder: "16:00", description: "Fixing publication time (HH:MM local tz)" }
+    fixing_tenors: { type: list, grid: "6", group: fixing, widget: tags, description: "Published tenors (e.g., ON, TN, 1W, 1M, 3M)" }
+    fallback_source: { grid: "3", group: fixing, enum: $enums.ENUM_FIXING_SOURCE, description: "Fallback if primary source unavailable" }
+    publication_delay_min: { type: int, grid: "2", group: fixing, default: 0, description: "Minutes after cutoff until publication" }
+
+    # ── Lifecycle ──
+    effective_from: { grid: "3", group: system, description: "Calendar effective start (ISO 8601)" }
+    effective_to: { grid: "3", group: system, description: "Calendar end / superseded (ISO 8601)" }
+    status: { facet: true, grid: "2", group: system, enum: $enums.ENUM_ENTITY_STATUS, default: ACTIVE }
+    external_refs:
+      type: list
+      grid: "12"
+      group: system
+      collapsed: true
+      description: "External identifiers (FpML BusinessCenter code, ISDA code, Bloomberg CDR)"
+      items:
+        type: dict
+        items:
+          namespace: { grid: "3", enum: [FPML_BC, ISDA, BBG_CDR, REUTERS, MARKIT, INTERNAL] }
+          code: { grid: "5" }
+          source: { grid: "4" }

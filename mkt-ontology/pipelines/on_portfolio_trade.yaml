@@ -1,0 +1,140 @@
+# =============================================================================
+# FLOW: on_portfolio_trade
+# =============================================================================
+# Trigger: RFQ event with payload.is_portfolio=true (basket / list trade)
+# Action: Fan out line-items to per-instrument sub-RFQs, aggregate quotes at
+#         basket level, enforce all-or-none on acceptance, then materialize
+#         child TRADING_BOOKING per line on win.
+# Primitive: ALLOCATION (1:N — basket → line-items) +
+#            AGGREGATION (N:1 — line quotes → basket quote)
+# Scenarios: PORTFOLIO_TRADE, LIST_TRADE
+# BBG/TW parity: Tradeweb Portfolio Trading (PT), MarketAxess Portfolio+.
+# =============================================================================
+
+flow: on_portfolio_trade
+mode: inline
+on_error: dlq
+category: pre_trade
+description: Basket/portfolio RFQ — fan-out line items, aggregate quotes, all-or-none fill
+
+source:
+  type: repo
+  repo: events
+  filter: "event_type == 'RFQ' AND payload.is_portfolio == true"
+
+steps:
+  - name: explode_line_items
+    description: Split basket RFQ into child RFQs per instrument
+    transform:
+      basket_id: "$.event_id"
+      line_items: "$.payload.line_items"
+      line_count: "$xu.len($.line_items)"
+      child_rfqs:
+        from: "$.line_items"
+        map:
+          event_type: RFQ
+          source: "$.source"
+          product_type: "$.product_type"
+          cpty_id: "$.cpty_id"
+          status: OPEN
+          payload:
+            direction: "$.direction"
+            notional: "$.notional"
+            ccy: "$.ccy"
+            ccy_pair: "$.ccy_pair"
+            security_id: "$.security_id"
+            tenor: "$.tenor"
+            is_portfolio_leg: true
+            basket_rfq_id: "$.basket_id"
+            line_seq: "$.line_seq"
+            rfq_mode: COMPETITIVE
+            valid_until: "$.basket_rfq.payload.valid_until"
+          links:
+            - event_id: "$.basket_id"
+              rel: CHILD_OF
+              role: CHILD
+
+  - name: aggregate_child_quotes
+    description: When all line-items have quotes, compute basket aggregate
+    transform:
+      child_rfq_ids: "$xu.map($.child_rfqs, c => c.event_id)"
+      all_child_quotes: "$xu.find_events({ event_type: 'QUOTE', payload: { rfq_event_id: { in: $.child_rfq_ids } } })"
+      quotes_by_dealer: "$xu.group_by($.all_child_quotes, 'payload.dealer_entity_id')"
+      complete_dealers: >-
+        $xu.filter_by($.quotes_by_dealer,
+                      (k, v) => $xu.len(v) == $.line_count)
+      all_or_none_ready: "$xu.gt($xu.len($.complete_dealers), 0)"
+
+  - name: rank_basket_quotes
+    filter: "$.all_or_none_ready == true"
+    description: Sum notional×price per dealer, rank
+    transform:
+      basket_quotes:
+        from: "$.complete_dealers"
+        map:
+          dealer_entity_id: "$.key"
+          line_quotes: "$.value"
+          total_notional: "$xu.sum($.value, q => q.payload.price * q.payload.notional)"
+          avg_spread_bps: "$xu.mean($.value, q => q.payload.spread_bps)"
+          all_firm: "$xu.all($.value, q => q.status == 'FIRM')"
+      ranked_baskets: "$xu.rank_by($.basket_quotes, 'total_notional', $.direction == 'BUY')"
+      best_basket: "$xu.first($.ranked_baskets)"
+
+  - name: materialize_basket_decision
+    filter: "$.best_basket != null"
+    transform:
+      basket_quote_update:
+        target_event_id: "$.basket_id"
+        payload:
+          aggregated_quotes: "$.ranked_baskets"
+          best_dealer_id: "$.best_basket.dealer_entity_id"
+          best_total_notional: "$.best_basket.total_notional"
+
+  - name: fan_out_bookings
+    filter: "$.status == 'ACCEPTED' AND $.best_basket != null"
+    description: On client accept, materialize TRADING_BOOKING per line item
+    transform:
+      winner_line_quotes: "$.best_basket.line_quotes"
+      bookings:
+        from: "$.winner_line_quotes"
+        map:
+          event_type: TRADING_BOOKING
+          source: "$.source"
+          status: UNMATCHED
+          product_type: "$.line_rfq.product_type"
+          cpty_id: "$.best_basket.dealer_entity_id"
+          payload:
+            direction: "$.line_rfq.payload.direction"
+            notional: "$.line_rfq.payload.notional"
+            ccy: "$.line_rfq.payload.ccy"
+            ccy_pair: "$.line_rfq.payload.ccy_pair"
+            security_id: "$.line_rfq.payload.security_id"
+            rate: "$.payload.price"
+            basket_trade_id: "$.basket_id"
+            line_seq: "$.line_rfq.payload.line_seq"
+          links:
+            - event_id: "$.basket_id"
+              rel: CHILD_OF
+              role: CHILD
+
+sinks:
+  - type: repo
+    repo: events
+    mode: save_many
+    filter: "$.child_rfqs != null AND $.status == 'PENDING'"
+    map: "$.child_rfqs"
+  - type: repo
+    repo: events
+    mode: update
+    filter: "$.basket_quote_update != null"
+    map: "$.basket_quote_update"
+  - type: repo
+    repo: events
+    mode: save_many
+    filter: "$.bookings != null"
+    map: "$.bookings"
+  - type: event
+    channel: xds:xftws:portfolio_trade
+  - type: websocket
+    channel: xds:xftws:portfolio_trade
+    event_type: portfolio_trade

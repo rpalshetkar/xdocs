@@ -1,24 +1,66 @@
 # =============================================================================
-# OVERLAY: FX — Currency pair, forwards, NDF, option specifics
+# OVERLAY: FX — Spot, Forward, Swap, NDF specifics (FX options live in option.yaml)
+# =============================================================================
+# This overlay captures FX-specific economics on top of the universal
+# economics{} partial. Conventions (pip factor, calendars, fixing source) live
+# in _partials/fx_conventions.yaml — DO NOT duplicate them here.
 # =============================================================================
 blueprint: partial
-description: "FX overlay — currency pair, forward points, NDF, fixing"
+description: "FX overlay — pair, spot/fwd/swap/NDF economics, fixing, CLS, compensation"
 
 fields:
-  ccy_pair:               { type: str, grid: "3", description: "Currency pair (e.g., EURUSD)" }
-  base_ccy:               { type: str, grid: "2", bbg: [BASE_CRNCY], description: "Base currency" }
-  quote_ccy:              { type: str, grid: "2", bbg: [QUOTE_CRNCY], description: "Quote currency" }
-  spot_date:              { type: date, grid: "3", bbg: [SPOT_DT], description: "Spot date (T+2)" }
+  # ── Pair reference (always populated) ──
+  ccy_pair:               { type: str, grid: "3", ref: fx_pairs.symbol, description: "Currency pair (e.g., EURUSD)" }
+  base_ccy:               { type: str, grid: "2", bbg: [BASE_CRNCY], enum: $enums.ENUM_CCY, description: "Base currency" }
+  quote_ccy:              { type: str, grid: "2", bbg: [QUOTE_CRNCY], enum: $enums.ENUM_CCY, description: "Quote currency" }
+  deliverability:         { type: str, grid: "3", enum: $enums.ENUM_FX_DELIVERABILITY, default: DELIVERABLE }
+
+  # ── Spot ──
+  spot_date:              { type: date, grid: "3", bbg: [SPOT_DT], description: "Contractual spot date (pair-specific T+N)" }
   spot_rate:              { type: float, grid: "3", description: "Spot reference rate" }
-  fwd_points:             { type: float, grid: "3", bbg: [FWD_PTS_MID], description: "Forward points" }
+  spot_source:            { type: str, grid: "3", enum: $enums.ENUM_FIXING_SOURCE, description: "Reference source for spot" }
+
+  # ── Forward / Swap ──
+  fwd_points:             { type: float, grid: "3", bbg: [FWD_PTS_MID], description: "Forward points (scaled per pair)" }
   all_in_rate:            { type: float, grid: "3", description: "Spot + forward points" }
-  tenor:                  { type: str, grid: "2", description: "Tenor (ON, TN, SN, 1W, 1M, 3M, 1Y)" }
-  # NDF
-  ndf_indicator:          { type: bool, grid: "2", description: "Non-deliverable forward flag" }
-  fixing_date:            { type: date, grid: "3", description: "NDF fixing/valuation date" }
-  fixing_source:          { type: str, grid: "3", description: "Fixing source (WM/Reuters, BFIX, EMTA)" }
+  tenor:                  { type: str, grid: "2", description: "Tenor (ON, TN, SN, 1W, 1M, 3M, 1Y, broken)" }
+  value_date:             { type: date, grid: "3", description: "Contractual value/settlement date" }
+  near_date:              { type: date, grid: "3", description: "Near leg value date (FX swap)" }
+  far_date:               { type: date, grid: "3", description: "Far leg value date (FX swap)" }
+  near_rate:              { type: float, grid: "3", description: "Near-leg rate (FX swap)" }
+  far_rate:               { type: float, grid: "3", description: "Far-leg rate (FX swap)" }
+  swap_points:            { type: float, grid: "3", description: "Swap points (far_rate − near_rate, scaled)" }
+  is_broken_date:         { type: bool, grid: "2", default: false, description: "Non-standard tenor (interpolated fwd pts)" }
+
+  # ── NDF ──
+  ndf_indicator:          { type: bool, grid: "2", description: "Non-deliverable forward flag (superseded by deliverability=NDF)" }
+  fixing_date:            { type: date, grid: "3", description: "NDF fixing / valuation date" }
+  fixing_source:          { type: str, grid: "3", enum: $enums.ENUM_FIXING_SOURCE, description: "Primary fixing source" }
+  fallback_fixing:        { type: str, grid: "3", enum: $enums.ENUM_FIXING_SOURCE, description: "Fallback if primary unavailable" }
+  emta_template_ref:      { type: str, grid: "3", description: "EMTA template code (BRL09, KRW10, INR01, etc.)" }
   fixing_rate:            { type: float, grid: "3", description: "Observed fixing rate" }
-  ndf_settlement_ccy:     { type: str, grid: "2", description: "NDF cash settlement currency" }
-  ndf_settlement_amount:  { type: float, grid: "3", description: "NDF net settlement" }
-  # CLS
-  cls_eligible:           { type: bool, grid: "2", description: "CLS eligible pair" }
+  fixing_status:          { type: str, grid: "2", enum: $enums.ENUM_FIXING_STATUS }
+  ndf_settlement_ccy:     { type: str, grid: "2", enum: $enums.ENUM_CCY, description: "NDF net-cash settlement ccy (usually USD)" }
+  ndf_settlement_amount:  { type: float, grid: "3", description: "NDF net settlement (signed)" }
+  ndf_settlement_date:    { type: date, grid: "3", description: "NDF cash-settlement value date (fixing + lag)" }
+
+  # ── CLS / PvP ──
+  cls_eligible:           { type: bool, grid: "2", description: "CLS-eligible pair AND both cpty CLS members" }
+  cls_session_date:       { type: date, grid: "3", description: "CLS session date (if settling via CLS)" }
+  cls_status:             { type: str, grid: "3", enum: [ELIGIBLE, SUBMITTED, MATCHED, RESCIND, SETTLED, FAILED], description: "CLS lifecycle status" }
+  pvp_method:             { type: str, grid: "3", enum: [CLS, HKICL_PVP, CIPS_PVP, NONE] }
+
+  # ── Compensation (FX broken-date / late-settlement) ──
+  compensation_amount:    { type: float, grid: "3", description: "Compensation amount in settlement ccy" }
+  compensation_ccy:       { type: str, grid: "2", enum: $enums.ENUM_CCY }
+  compensation_reason:    { type: str, grid: "4", enum: [LATE_SETTLE, WRONG_RATE, WRONG_DATE, BROKEN_SPOT, OTHER] }
+  compensation_rate_used: { type: float, grid: "3", description: "Rate used to compute compensation" }
+
+  # ── Precious Metals (XAU/XAG/XPT/XPD) ──
+  metal_unit:             { type: str, grid: "2", enum: [TROY_OZ, KG, GRAM], description: "Unit for metal pairs" }
+  loco:                   { type: str, grid: "3", enum: [LONDON, ZURICH, NEW_YORK, HONG_KONG], description: "Loco (custody location)" }
+  allocated:              { type: bool, grid: "2", description: "Allocated vs unallocated" }
+
+  # ── Overrides ──
+  settlement_calendars_override: { type: list, grid: "6", widget: tags, description: "Non-standard calendar set (overrides fx_pair)" }
+  non_standard_reason:    { type: str, grid: "6", description: "Why this trade deviates from pair defaults" }

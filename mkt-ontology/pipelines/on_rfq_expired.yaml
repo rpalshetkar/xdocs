@@ -1,0 +1,87 @@
+# =============================================================================
+# FLOW: on_rfq_expired
+# =============================================================================
+# Trigger: Timer — every 30s scan for RFQs past valid_until with status
+#          still OPEN/QUOTED.
+# Action: Transition RFQ → EXPIRED, cancel any OPEN quotes, mark negotiation
+#         status TRADED_AWAY/COVER if better external fill was observed.
+# Primitive: OVERRIDE (timer-driven state change)
+# Scenarios: RFQ_MISS, OUTBOUND_RFQ_MISS
+# BBG/TW parity: Tradeweb Timeout, Bloomberg RFQ TIF (Time-in-Force).
+# =============================================================================
+
+flow: on_rfq_expired
+mode: scheduled
+interval_seconds: 30
+on_error: dlq
+category: pre_trade
+description: RFQ time-in-force expiry — transition to EXPIRED and cancel linked quotes
+
+source:
+  type: repo
+  repo: events
+  filter: >-
+    event_type == 'RFQ'
+    AND status IN ('PENDING', 'OPEN', 'QUOTED')
+    AND payload.valid_until < $now
+
+steps:
+  - name: classify_expiry
+    transform:
+      rfq_event_id: "$.event_id"
+      time_overdue_sec: "$xu.seconds_since($.payload.valid_until)"
+      rfq_mode: "$.payload.rfq_mode"
+
+  - name: load_linked_quotes
+    description: Find all quotes submitted against this RFQ
+    transform:
+      all_quotes: "$xu.find_events({ event_type: 'QUOTE', payload: { rfq_event_id: $.rfq_event_id } })"
+      active_quotes: "$xu.filter($.all_quotes, q => q.status IN ('INDICATIVE', 'FIRM'))"
+      any_quotes_received: "$xu.gt($xu.len($.active_quotes), 0)"
+
+  - name: determine_outcome
+    transform:
+      rfq_final_status: EXPIRED
+      negotiation_status: >-
+        $xu.if($.any_quotes_received, 'COVER', 'OPEN')
+      miss_reason: >-
+        $xu.if($.any_quotes_received, 'CLIENT_DID_NOT_ACCEPT', 'NO_QUOTES')
+
+  - name: update_rfq
+    transform:
+      rfq_update:
+        status: EXPIRED
+        payload:
+          negotiation_status: "$.negotiation_status"
+          expired_at: "$now"
+          miss_reason: "$.miss_reason"
+          final_quote_count: "$xu.len($.active_quotes)"
+
+  - name: cancel_quotes
+    filter: "$.any_quotes_received"
+    transform:
+      quote_updates:
+        from: "$.active_quotes"
+        map:
+          event_id: "$.id"
+          status: EXPIRED
+          payload:
+            expired_at: "$now"
+            expiry_reason: RFQ_TIMEOUT
+
+sinks:
+  - type: repo
+    repo: events
+    mode: update
+    target_event_id: "$.rfq_event_id"
+    map: "$.rfq_update"
+  - type: repo
+    repo: events
+    mode: update_many
+    filter: "$.quote_updates != null"
+    map: "$.quote_updates"
+  - type: event
+    channel: xds:xftws:rfq_expired
+  - type: websocket
+    channel: xds:xftws:rfq_expired
+    event_type: rfq_expired

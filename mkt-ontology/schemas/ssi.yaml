@@ -1,0 +1,113 @@
+# =============================================================================
+# SSI — Standing Settlement Instruction
+# =============================================================================
+# Per-party × per-currency payment routing. Supports CLS, RTGS, correspondent
+# banking, and intermediary chains. Effective-dated with approver audit.
+# Used by settlement pipelines to resolve where cash actually moves on value
+# date.
+# =============================================================================
+blueprint: schema
+kind: SSI
+qualifier: "ftp-ssi-"
+xid: ssi_id|alias
+xns: [id, xid]
+description: "Standing Settlement Instructions — nostro/vostro, CLS, correspondent chains"
+icon: dollar-sign
+
+sections:
+  - name: identity
+    label: "SSI"
+    icon: dollar-sign
+  - name: account
+    label: "Account"
+    icon: credit-card
+  - name: correspondent
+    label: "Correspondent Chain"
+    icon: git-branch
+  - name: cls
+    label: "CLS / PvP"
+    icon: shield
+  - name: lifecycle
+    label: "Lifecycle"
+    icon: clock
+  - name: system
+    label: "System"
+    icon: settings
+
+views:
+  - type: table
+    label: "SSI Grid"
+    icon: table
+    default: true
+  - type: card
+    label: "SSI Cards"
+    icon: layout-grid
+    title: alias
+    subtitle: party_id
+    badge: ccy
+
+model:
+  fields:
+    # ── Identity ──
+    ssi_id: { key: true, rank: hero, grid: "3", group: identity, col: "2<", placeholder: "FTP-SSI-001" }
+    alias: { fuzzy: true, grid: "4", rank: hero, group: identity, card: title, col: "1<", placeholder: "ACME-USD-CITI-NY" }
+    party_id: { grid: "3", rank: primary, group: identity, ref: entities.name, description: "Owner party" }
+    ccy: { facet: true, grid: "2", rank: primary, group: identity, card: badge, enum: $enums.ENUM_CCY }
+    payment_method: { facet: true, grid: "3", rank: primary, group: identity, enum: $enums.ENUM_PAYMENT_METHOD }
+    purpose: { grid: "3", group: identity, enum: [PRIMARY, BACKUP, FEES, MARGIN, PREMIUM, COUPON, PRINCIPAL], default: PRIMARY, description: "Intended use" }
+    product_scope: { type: list, grid: "6", group: identity, widget: tags, description: "Applicable products (empty = all)" }
+
+    # ── Account ──
+    account_no: { grid: "4", group: account, description: "Account number (masked in UI by default)" }
+    account_name: { grid: "5", group: account, description: "Account title / holder name" }
+    bank_bic: { grid: "3", group: account, description: "Account-holding bank BIC (our nostro agent)" }
+    bank_name: { grid: "6", group: account, description: "Account-holding bank name" }
+    iban: { grid: "4", group: account, description: "IBAN (EUR/GBP/CH/ME regions)" }
+    sort_code: { grid: "2", group: account, description: "UK sort code / US ABA / local clearing code" }
+    clearing_system: { grid: "3", group: account, enum: [FEDWIRE_ABA, CHAPS_SORT, TARGET2_BIC, SIC_IID, BOJ_BRANCH, LOCAL_IFSC, LOCAL_BSB, LOCAL_IFS] }
+    clearing_code: { grid: "3", group: account, description: "Clearing code value" }
+
+    # ── Correspondent Chain ──
+    correspondent_bic: { grid: "3", group: correspondent, description: "Correspondent bank BIC (field :56A in MT103)" }
+    correspondent_name: { grid: "5", group: correspondent }
+    intermediary_bic: { grid: "3", group: correspondent, description: "Intermediary BIC (field :57A)" }
+    intermediary_name: { grid: "5", group: correspondent }
+    ultimate_beneficiary: { grid: "5", group: correspondent, description: "Ultimate beneficiary (field :59)" }
+    ref_for_beneficiary: { grid: "4", group: correspondent, description: "Reference text (field :70)" }
+
+    # ── CLS / PvP ──
+    cls_eligible: { type: bool, grid: "3", group: cls, default: false, description: "Settles via CLS" }
+    cls_member_id: { grid: "3", group: cls, description: "CLS settlement member ID" }
+    cls_member_bic: { grid: "3", group: cls, description: "Settlement member BIC (TPID)" }
+    cls_member_type: { grid: "3", group: cls, enum: [SETTLEMENT_MEMBER, USER_MEMBER, THIRD_PARTY, NON_CLS] }
+    cls_cutoff_ref: { grid: "3", group: cls, description: "CLS cutoff reference (00:00 CET ISF)" }
+
+    # ── Lifecycle ──
+    effective_from: { grid: "3", group: lifecycle, description: "ISO 8601 — when SSI becomes active" }
+    effective_to: { grid: "3", group: lifecycle, description: "ISO 8601 — when SSI expires / superseded" }
+    priority: { type: int, grid: "2", group: lifecycle, default: 0, description: "Higher wins if multiple SSIs match" }
+    status: { facet: true, grid: "2", group: lifecycle, enum: [DRAFT, PENDING_APPROVAL, ACTIVE, SUSPENDED, SUPERSEDED, REVOKED], default: DRAFT }
+    approver: { grid: "3", group: lifecycle, description: "User who approved activation" }
+    approved_at: { grid: "3", group: lifecycle, description: "Approval timestamp (ISO 8601)" }
+    superseded_by: { grid: "3", group: lifecycle, ref: ssis.alias, description: "Next-generation SSI if superseded" }
+
+    # ── System ──
+    encrypted_fields:
+      type: list
+      grid: "6"
+      group: system
+      widget: tags
+      default: [account_no, iban]
+      description: "Fields encrypted at rest (uses xftws_counterparty_pii_dek)"
+    external_refs:
+      type: list
+      grid: "12"
+      group: system
+      collapsed: true
+      description: "Vendor reference IDs (Omgeo ALERT, DTCC CTM, SWIFT SRDB)"
+      items:
+        type: dict
+        items:
+          namespace: { grid: "3", enum: [ALERT, CTM, SRDB, MARKIT, INTERNAL] }
+          code: { grid: "5" }
+          last_synced: { grid: "4" }

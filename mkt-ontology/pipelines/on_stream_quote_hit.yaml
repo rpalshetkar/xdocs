@@ -1,0 +1,133 @@
+# =============================================================================
+# FLOW: on_stream_quote_hit
+# =============================================================================
+# Trigger: STREAM_QUOTE event saved with status=HIT or LIFTED
+# Action: Click-to-trade — materialize ORDER, apply last-look, credit check,
+#         and auto-book to TRADING_BOOKING if firm / full-amount.
+# Primitive: CORRELATION (1:1) — tick → order with stream_id chain
+# Scenarios: STREAM_TO_TRADE, STREAM_TO_RFQ (if client only wants to negotiate)
+# BBG/TW parity: mirrors TradeWeb Streaming + Bloomberg BMTFQ click-to-trade.
+# =============================================================================
+
+flow: on_stream_quote_hit
+mode: inline
+on_error: dlq
+category: execution
+description: Click-to-trade on streaming quote — last-look, credit check, auto-book
+
+source:
+  type: repo
+  repo: events
+  filter: "event_type == 'STREAM_QUOTE' AND payload.status IN ('HIT', 'LIFTED')"
+
+steps:
+  - name: resolve_pair_defaults
+    description: Pull fx_pair master for pip factor, CLS flag, default calendars
+    transform:
+      pair: "$xu.load_record('fx_pairs', $.payload.pair_id)"
+      pip_factor: "$.pair.pip_factor"
+      cls_eligible: "$.pair.cls_eligible"
+      settlement_calendars: "$.pair.settlement_calendars"
+      settlement_days: "$.pair.standard_spot_offset"
+
+  - name: resolve_client_credit
+    description: Look up credit limit for hitting client
+    transform:
+      client_entity_id: "$.payload.client_entity_id"
+      limit: "$xu.load_credit_limit($.client_entity_id, $.payload.product_type, $.payload.pair_id)"
+      current_util: "$.limit.current_utilization"
+      projected_util: "$xu.add($.current_util, $.payload.hit_size)"
+      breach_risk: "$xu.gt($.projected_util, $.limit.soft_cap)"
+      hard_breach: "$xu.gt($.projected_util, $.limit.hard_cap)"
+
+  - name: evaluate_last_look
+    description: If firmness=LAST_LOOK, decide accept/reject within window
+    filter: "$.payload.firmness == 'LAST_LOOK'"
+    transform:
+      tick_age_ms: "$xu.ms_since($.payload.tick_ts)"
+      stale: "$xu.gt($.tick_age_ms, $.payload.last_look_ms)"
+      current_mid: "$xu.get_current_mid($.payload.pair_id)"
+      price_moved_pips: "$xu.abs_pips($.payload.mid_price, $.current_mid, $.pip_factor)"
+      price_threshold_breach: "$xu.gt($.price_moved_pips, 2.0)"
+      last_look_outcome: >-
+        $xu.if($.hard_breach, 'REJECTED',
+          $xu.if($.stale, 'TIMED_OUT',
+            $xu.if($.price_threshold_breach, 'REJECTED', 'ACCEPTED')))
+      rejection_reason: >-
+        $xu.if($.hard_breach, 'CREDIT',
+          $xu.if($.stale, 'STALE_PRICE',
+            $xu.if($.price_threshold_breach, 'PRICE_MOVED', null)))
+
+  - name: update_tick_outcome
+    transform:
+      tick_update:
+        payload:
+          last_look_outcome: "$.last_look_outcome"
+          rejection_reason: "$.rejection_reason"
+        status: "$xu.if($.last_look_outcome == 'ACCEPTED', 'HIT', 'WITHDRAWN')"
+
+  - name: materialize_order
+    filter: "$.last_look_outcome == 'ACCEPTED' OR $.payload.firmness IN ('FIRM', 'FULL_AMOUNT', 'STREAMING')"
+    transform:
+      order:
+        event_type: ORDER
+        source: "$.payload.venue"
+        status: ACCEPTED
+        product_type: "$.payload.product_type"
+        cpty_id: "$.client_entity_id"
+        payload:
+          direction: "$xu.if($.payload.hit_side == 'BID', 'SELL', 'BUY')"
+          ccy_pair: "$.payload.pair_id"
+          notional: "$.payload.hit_size"
+          rate: "$xu.if($.payload.hit_side == 'BID', $.payload.bid_price, $.payload.ask_price)"
+          all_in_rate: "$xu.if($.payload.hit_side == 'BID', $.payload.all_in_bid, $.payload.all_in_ask)"
+          value_date: "$.payload.value_date"
+          stream_id: "$.payload.stream_id"
+          stream_tick_id: "$.event_id"
+          venue_quote_id: "$.payload.venue_stream_id"
+          firmness: "$.payload.firmness"
+          last_look_outcome: "$.last_look_outcome"
+        conventions:
+          pair_id: "$.payload.pair_id"
+          pip_factor: "$.pip_factor"
+          settlement_days: "$.settlement_days"
+          cls_eligible: "$.cls_eligible"
+          settlement_calendars: "$.settlement_calendars"
+        links:
+          - event_id: "$.event_id"
+            rel: ORIGINATES_FROM
+            role: CHILD
+
+  - name: auto_book_if_firm
+    filter: "$.payload.firmness IN ('FIRM', 'FULL_AMOUNT')"
+    transform:
+      trading_booking:
+        event_type: TRADING_BOOKING
+        source: STP_PIPELINE
+        status: UNMATCHED
+        payload: "$.order.payload"
+        conventions: "$.order.conventions"
+        links:
+          - event_id: "$.event_id"
+            rel: CREATED_FROM
+            role: CHILD
+
+sinks:
+  - type: repo
+    repo: events
+    mode: save
+    filter: "$.order != null"
+    map: "$.order"
+  - type: repo
+    repo: events
+    mode: save
+    filter: "$.trading_booking != null"
+    map: "$.trading_booking"
+  - type: event
+    channel: xds:xftws:stream_hit
+  - type: websocket
+    channel: xds:xftws:stream_hit
+    event_type: stream_hit
+  - type: event
+    channel: xds:xftws:credit_alert
+    filter: "$.breach_risk == true"

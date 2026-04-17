@@ -1,0 +1,142 @@
+# =============================================================================
+# FLOW: on_rfq_competitive
+# =============================================================================
+# Trigger: QUOTE event on an RFQ with rfq_mode=COMPETITIVE
+# Action: Aggregate competing quotes, rank by price, select winner on client
+#         acceptance or RFQ expiry, mark losers TRADED_AWAY or COVER.
+# Primitive: AGGREGATION (N:1) → OVERRIDE (winner selection)
+# Scenarios: COMPETITIVE_RFQ, VENUE_RFQ, CLIENT_RFQ
+# BBG/TW parity: Tradeweb MLQ, Bloomberg ALLQ, MarketAxess Open Trading.
+# =============================================================================
+
+flow: on_rfq_competitive
+mode: inline
+on_error: dlq
+category: pre_trade
+description: Competitive multi-dealer RFQ — rank quotes, select winner, mark losers
+
+source:
+  type: repo
+  repo: events
+  filter: >-
+    (event_type == 'QUOTE' AND $xu.load_event(payload.rfq_event_id).payload.rfq_mode == 'COMPETITIVE')
+    OR (event_type == 'RFQ' AND status == 'ACCEPTED' AND payload.rfq_mode == 'COMPETITIVE')
+
+steps:
+  - name: load_rfq_and_quotes
+    description: Collect the RFQ and all competing quotes
+    transform:
+      rfq_event_id: >-
+        $xu.if($.event_type == 'QUOTE', $.payload.rfq_event_id, $.event_id)
+      rfq: "$xu.load_event($.rfq_event_id)"
+      all_quotes: "$xu.find_events({ event_type: 'QUOTE', payload: { rfq_event_id: $.rfq_event_id } })"
+      active_quotes: "$xu.filter($.all_quotes, q => q.status IN ('INDICATIVE', 'FIRM'))"
+      num_dealers: "$.rfq.payload.num_dealers"
+      num_received: "$xu.len($.active_quotes)"
+
+  - name: rank_quotes
+    description: Rank by price (direction-aware)
+    transform:
+      direction: "$.rfq.payload.direction"
+      sort_asc: "$xu.eq($.direction, 'BUY')"
+      ranked_quotes: "$xu.rank_by($.active_quotes, 'payload.price', $.sort_asc)"
+      best_quote: "$xu.first($.ranked_quotes)"
+      cover_quote: "$xu.nth($.ranked_quotes, 1)"
+      cover_spread_pips: >-
+        $xu.abs_pips($.cover_quote.payload.price, $.best_quote.payload.price,
+                     $.rfq.conventions.pip_factor)
+
+  - name: apply_ranks
+    description: Assign dealer_rank to every quote
+    transform:
+      quote_updates:
+        from: "$.ranked_quotes"
+        map:
+          event_id: "$.id"
+          payload:
+            dealer_rank: "$.rank"
+            rank_total: "$.num_received"
+
+  - name: select_winner
+    filter: >-
+      $.event_type == 'RFQ' AND $.status == 'ACCEPTED'
+      AND $.rfq.payload.accepted_quote_event_id != null
+    description: Client accepted a specific quote — declare winner and mark losers
+    transform:
+      winner_event_id: "$.rfq.payload.accepted_quote_event_id"
+      winner: "$xu.load_event($.winner_event_id)"
+      loser_ids: "$xu.filter_ids($.ranked_quotes, q => q.id != $.winner_event_id)"
+      winner_update:
+        status: ACCEPTED
+        payload:
+          is_winner: true
+          dealer_rank: 1
+      loser_update:
+        from: "$.loser_ids"
+        map:
+          event_id: "$"
+          status: TRADED_AWAY
+          payload:
+            is_winner: false
+            negotiation_status: TRADED_AWAY
+            traded_away_at: "$now"
+            traded_away_to: "$.winner.payload.dealer_entity_id"
+            cover_spread_pips: "$.cover_spread_pips"
+
+  - name: materialize_order
+    filter: "$.winner != null"
+    description: Create ORDER from winning quote
+    transform:
+      order:
+        event_type: ORDER
+        source: "$.rfq.source"
+        status: ACCEPTED
+        product_type: "$.rfq.product_type"
+        cpty_id: "$.winner.payload.dealer_entity_id"
+        payload:
+          direction: "$.rfq.payload.direction"
+          ccy_pair: "$.rfq.payload.ccy_pair"
+          notional: "$.rfq.payload.notional"
+          rate: "$.winner.payload.price"
+          all_in_rate: "$.winner.payload.all_in_rate"
+          tenor: "$.rfq.payload.tenor"
+          venue: "$.rfq.payload.venue"
+          rfq_event_id: "$.rfq_event_id"
+          winning_quote_id: "$.winner_event_id"
+          cover_spread_pips: "$.cover_spread_pips"
+        conventions: "$.rfq.conventions"
+        links:
+          - event_id: "$.rfq_event_id"
+            rel: CORRELATES_WITH
+            role: PARENT
+          - event_id: "$.winner_event_id"
+            rel: CREATED_FROM
+            role: CHILD
+
+sinks:
+  - type: repo
+    repo: events
+    mode: update_many
+    filter: "$.quote_updates != null"
+    map: "$.quote_updates"
+  - type: repo
+    repo: events
+    mode: update
+    filter: "$.winner_update != null"
+    target_event_id: "$.winner_event_id"
+    map: "$.winner_update"
+  - type: repo
+    repo: events
+    mode: update_many
+    filter: "$.loser_update != null"
+    map: "$.loser_update"
+  - type: repo
+    repo: events
+    mode: save
+    filter: "$.order != null"
+    map: "$.order"
+  - type: event
+    channel: xds:xftws:competitive_rfq
+  - type: websocket
+    channel: xds:xftws:competitive_rfq
+    event_type: competitive_rfq_result

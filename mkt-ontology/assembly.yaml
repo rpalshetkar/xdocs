@@ -111,6 +111,12 @@ schemas:
   book: schemas/book.yaml
   fpml: schemas/fpml.yaml
   event: schemas/event.yaml
+  # Slice 1 — reference-data foundations
+  calendar: schemas/calendar.yaml
+  ssi: schemas/ssi.yaml
+  credit_limit: schemas/credit_limit.yaml
+  # Slice 2 — FX depth
+  fx_pair: schemas/fx_pair.yaml
 
 # =============================================================================
 # DATASETS
@@ -182,6 +188,104 @@ datasets:
       owner: operations_team
       tags: [fpmls, products, reference]
       description: ISDA FpML product templates
+
+  # ---------------------------------------------------------------------------
+  # Slice 1 — Reference-data foundations
+  # ---------------------------------------------------------------------------
+  calendars:
+    connector: ${connectors.qwik}
+    schema: calendar
+    dset: calendars
+    itype: polars
+    otype: auto
+    capabilities:
+      read: true
+      write: true
+      cache: true
+      streaming: false
+    streaming:
+      key: cal_id
+    mock:
+      generator: domains.xftws.server.mock_data:gen_fixtures
+      count: 40
+    meta:
+      icon: calendar
+      node: XFTWS/REFERENCE/CALENDARS
+      owner: operations_team
+      tags: [calendars, reference, settlement, fixing]
+      description: Holiday / business-day / fixing / exchange calendars
+
+  ssis:
+    connector: ${connectors.qwik}
+    schema: ssi
+    dset: ssis
+    itype: polars
+    otype: auto
+    capabilities:
+      read: true
+      write: true
+      cache: true
+      streaming: false
+    streaming:
+      key: ssi_id
+    mock:
+      generator: domains.xftws.server.mock_data:gen_fixtures
+      count: 60
+    meta:
+      icon: dollar-sign
+      node: XFTWS/REFERENCE/SSIS
+      owner: operations_team
+      tags: [ssi, settlement, reference, pii]
+      description: Standing Settlement Instructions — nostro/vostro, CLS, correspondent chains
+
+  credit_limits:
+    connector: ${connectors.qwik}
+    schema: credit_limit
+    dset: credit_limits
+    itype: polars
+    otype: auto
+    capabilities:
+      read: true
+      write: true
+      cache: true
+      streaming: false
+    streaming:
+      key: limit_id
+    mock:
+      generator: domains.xftws.server.mock_data:gen_fixtures
+      count: 50
+    meta:
+      icon: shield
+      node: XFTWS/REFERENCE/CREDIT_LIMITS
+      owner: risk_team
+      tags: [credit, csa, limits, reference, risk]
+      description: Credit limits, CSA terms, margin agreements, utilization
+
+  # ---------------------------------------------------------------------------
+  # Slice 2 — FX-pair reference master
+  # ---------------------------------------------------------------------------
+  fx_pairs:
+    connector: ${connectors.qwik}
+    schema: fx_pair
+    dset: fx_pairs
+    itype: polars
+    otype: auto
+    capabilities:
+      read: true
+      write: true
+      cache: true
+      streaming: false
+    streaming:
+      key: pair_id
+    mock:
+      generator: domains.xftws.server.mock_data:gen_fixtures
+      count: 60
+    meta:
+      icon: repeat
+      node: XFTWS/REFERENCE/FX_PAIRS
+      owner: fx_team
+      tags: [fx, pairs, reference, pip, cls, ndf]
+      description: FX currency-pair master — pip factor, deliverability, fixing, CLS, conventions
 
   events:
     connector: ${connectors.qwik}
@@ -591,6 +695,83 @@ correlations:
     audit: full
     on_apply: flag_as_disputed
 
+  # ─── Slice 3: BBG/TW-style flows ──────────────────────────────────────────
+
+  stream_to_trade:
+    primitive: CORRELATION
+    description: "STREAM_QUOTE hit → ORDER — click-to-trade with last-look"
+    cardinality: ONE_TO_ONE
+    lhs: { event_type: STREAM_QUOTE, payload: { status: [HIT, LIFTED] } }
+    rhs: { event_type: ORDER, payload: { stream_tick_id: { is_not_null: true } } }
+    key_fields: [payload.stream_id, payload.stream_tick_id]
+    tolerance_fields:
+      payload.notional: 0.01
+    compare_fields: [payload.notional, payload.rate, payload.ccy_pair]
+    on_match: auto_book_if_firm
+    on_break: flag_last_look_reject
+
+  axe_to_rfq:
+    primitive: CORRELATION
+    description: "AXE → RFQ — indicative interest triggers firm inquiry"
+    cardinality: ONE_TO_MANY
+    lhs: { event_type: AXE, status: LIVE }
+    rhs: { event_type: RFQ, payload: { triggered_by_axe_id: { is_not_null: true } } }
+    key_fields: [payload.pair_id, payload.security_id]
+    compare_fields: [payload.notional, payload.direction]
+    on_match: update_axe_fill
+
+  competitive_aggregation:
+    primitive: AGGREGATION
+    description: "1 competitive RFQ ↔ N dealer QUOTEs — rank, pick winner, mark losers"
+    cardinality: ONE_TO_MANY
+    sources: { event_type: QUOTE }
+    target: { event_type: RFQ, payload: { rfq_mode: COMPETITIVE } }
+    group_by: [payload.rfq_event_id]
+    aggregate:
+      best_price: min_or_max_by_direction
+      quote_count: count
+      cover_spread_pips: second_best_minus_best
+    on_complete: select_winner_mark_losers
+
+  portfolio_basket:
+    primitive: ALLOCATION
+    description: "Portfolio RFQ → N line-item RFQs; dealer quotes must be complete for all-or-none"
+    cardinality: ONE_TO_MANY
+    parent: { event_type: RFQ, payload: { is_portfolio: true } }
+    children: { event_type: RFQ, payload: { is_portfolio_leg: true }, via_link: CHILD_OF }
+    validation:
+      require_all_quoted: true
+      require_complete: true
+    on_complete: materialize_basket_bookings
+
+  fixing_propagation:
+    primitive: AGGREGATION
+    description: "FX_FIXING → N downstream events (NDF settlements, barrier checks, auto-exercise)"
+    cardinality: ONE_TO_MANY
+    sources: { event_type: FX_FIXING, status: FIXED }
+    target: { event_type: [SETTLEMENT_INSTR, EXERCISE_NOTICE] }
+    group_by: [payload.pair_id, payload.fixing_date, payload.fixing_source]
+    on_complete: record_downstream_refs
+
+  block_alloc_fanout:
+    primitive: ALLOCATION
+    description: "Block TRADE → N ALLOC_SPLIT with weighted-average price"
+    cardinality: ONE_TO_MANY
+    parent: { event_type: TRADE, payload: { is_block: true } }
+    children: { event_type: ALLOC_SPLIT, via_link: CHILD_OF }
+    validation:
+      sum_field: payload.notional
+      tolerance: 0.01
+      require_complete: true
+    on_complete: confirm_via_ctm
+
+  rfq_tif_expiry:
+    primitive: OVERRIDE
+    description: "Timer-driven RFQ expiry after valid_until"
+    role: [system]
+    mode: scheduled
+    on_apply: transition_rfq_expired
+
 # =============================================================================
 # PIPELINES — Event-driven flow DAGs (consumed by xds.flows)
 # =============================================================================
@@ -605,6 +786,14 @@ pipelines:
   on_amendment_filed: pipelines/on_amendment_filed.yaml
   on_position_snapshot: pipelines/on_position_snapshot.yaml
   on_override_action: pipelines/on_override_action.yaml
+  # Slice 3 — BBG/TW-style workflow depth
+  on_stream_quote_hit: pipelines/on_stream_quote_hit.yaml
+  on_axe_response: pipelines/on_axe_response.yaml
+  on_rfq_competitive: pipelines/on_rfq_competitive.yaml
+  on_rfq_expired: pipelines/on_rfq_expired.yaml
+  on_portfolio_trade: pipelines/on_portfolio_trade.yaml
+  on_fx_fixing_resolved: pipelines/on_fx_fixing_resolved.yaml
+  on_block_allocation: pipelines/on_block_allocation.yaml
 
 # =============================================================================
 # AUTHENTICATION & AUTHORIZATION
@@ -650,6 +839,24 @@ auth:
         delete: [admin]
       trade_blotter:
         read: [sales, trading, operations, risk, compliance, admin]
+      # Slice 1 ref-data
+      calendars:
+        read: [sales, trading, operations, risk, compliance, admin]
+        write: [operations, admin]
+        delete: [admin]
+      ssis:
+        read: [operations, compliance, admin]
+        write: [operations, admin]
+        delete: [admin]
+      credit_limits:
+        read: [sales, trading, operations, risk, compliance, admin]
+        write: [risk, admin]
+        delete: [admin]
+      # Slice 2 FX ref-data
+      fx_pairs:
+        read: [sales, trading, operations, risk, compliance, admin]
+        write: [operations, admin]
+        delete: [admin]
     default:
       read: [admin]
       write: [admin]

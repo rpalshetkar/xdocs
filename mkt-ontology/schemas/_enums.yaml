@@ -102,6 +102,8 @@ enums:
     - { value: AXE, label: "Axe / IOI", icon: radio, color: cyan }
     - { value: RFQ, label: "Request for Quote", icon: help-circle, color: blue }
     - { value: QUOTE, icon: message-square, color: blue }
+    - { value: STREAM_QUOTE, label: "Streaming Quote Tick", icon: radio, color: cyan }
+    - { value: STREAM_QUOTE_REJECT, label: "Stream Reject (last-look)", icon: x-octagon, color: red }
     - { value: ORDER, icon: shopping-cart, color: blue }
     - { value: AUCTION_BID, label: "Auction Bid", icon: gavel, color: violet }
     # Booking
@@ -137,6 +139,9 @@ enums:
     - { value: RISK_MEASURE, label: "Risk Measure", icon: activity, color: blue }
     - { value: SCHEDULE_EVENT, label: "Schedule Event", icon: calendar, color: grey }
     - { value: POSITION_SNAPSHOT, label: "Position Snapshot", icon: camera, color: grey }
+    # FX / Fixing (Slice 2)
+    - { value: FX_FIXING, label: "FX / NDF Fixing", icon: crosshair, color: blue }
+    - { value: FX_FIXING_CONTEST, label: "Fixing Contested", icon: alert-triangle, color: red }
 
   ENUM_EVENT_STATUS:
     - { value: ACTIVE, color: green, icon: check-circle }
@@ -728,3 +733,234 @@ enums:
     - { value: ACT365, label: "ACT/365" }
     - { value: "30360", label: "30/360" }
     - { value: ACT_ACT, label: "ACT/ACT" }
+
+  # ===========================================================================
+  # CALENDAR & BUSINESS-DAY ENUMS (Slice 1 ref-data)
+  # ===========================================================================
+  ENUM_CALENDAR_TYPE:
+    - { value: SETTLEMENT, label: "Settlement", icon: dollar-sign, description: "Currency payment system open days" }
+    - { value: FIXING, label: "Fixing", icon: crosshair, description: "Benchmark/rate fixing publication days" }
+    - { value: EXCHANGE, label: "Exchange", icon: bar-chart, description: "Listed venue trading days" }
+    - { value: CUSTODY, label: "Custody", icon: lock, description: "Custodian/CSD book-entry days" }
+    - { value: TRADING, label: "Trading", icon: trending-up, description: "OTC dealer trading days" }
+
+  ENUM_FIXING_SOURCE:
+    - { value: WM_4PM, label: "WM/Refinitiv 4PM London", icon: clock }
+    - { value: BFIX, label: "Bloomberg BFIX", icon: bar-chart }
+    - { value: ECB, label: "ECB Reference", icon: landmark }
+    - { value: EMTA, label: "EMTA (NDF)", icon: globe }
+    - { value: CFETS, label: "CFETS (CNY fixing)", icon: globe }
+    - { value: RBI, label: "RBI (INR ref)", icon: landmark }
+    - { value: BCB, label: "BCB (BRL PTAX)", icon: landmark }
+    - { value: SAFE, label: "SAFE (CNH offshore)", icon: globe }
+    - { value: FED_NOON, label: "Fed Noon Buying", icon: landmark }
+    - { value: BOK, label: "Bank of Korea (KRW)", icon: landmark }
+    - { value: SBIF, label: "SBIF (CLP)", icon: landmark }
+    - { value: BANXICO, label: "Banxico FIX (MXN)", icon: landmark }
+    - { value: PBOC, label: "PBOC CNY Mid", icon: landmark }
+    - { value: LIBOR, label: "LIBOR Legacy", icon: percent }
+    - { value: SOFR, label: "SOFR", icon: percent }
+    - { value: ESTR, label: "€STR", icon: percent }
+    - { value: SONIA, label: "SONIA", icon: percent }
+    - { value: TONA, label: "TONA", icon: percent }
+    - { value: SARON, label: "SARON", icon: percent }
+
+  ENUM_PAYMENT_METHOD:
+    - { value: CLS, label: "CLS (Continuous Linked Settlement)", icon: shield, description: "PvP for 18 CLS currencies" }
+    - { value: FEDWIRE, label: "Fedwire (USD RTGS)", icon: landmark }
+    - { value: CHIPS, label: "CHIPS (USD)", icon: landmark }
+    - { value: CHAPS, label: "CHAPS (GBP RTGS)", icon: landmark }
+    - { value: TARGET2, label: "TARGET2 (EUR)", icon: landmark }
+    - { value: BOJ_NET, label: "BOJ-NET (JPY)", icon: landmark }
+    - { value: SIC, label: "SIC (CHF)", icon: landmark }
+    - { value: RTGS, label: "Local RTGS", icon: landmark }
+    - { value: SWIFT, label: "SWIFT Correspondent", icon: globe }
+    - { value: CIPS, label: "CIPS (CNY x-border)", icon: globe }
+    - { value: CMU, label: "HK CMU", icon: shield }
+    - { value: INTERNAL, label: "Internal Book Transfer", icon: home }
+
+  ENUM_BUSINESS_DAY_CONV:
+    - { value: FOLLOWING, label: "Following" }
+    - { value: MODIFIED_FOLLOWING, label: "Modified Following" }
+    - { value: PRECEDING, label: "Preceding" }
+    - { value: MODIFIED_PRECEDING, label: "Modified Preceding" }
+    - { value: END_OF_MONTH, label: "End of Month" }
+    - { value: NONE, label: "No Adjustment" }
+
+  ENUM_WEEKEND_RULE:
+    - { value: SAT_SUN, label: "Sat+Sun (Western)" }
+    - { value: FRI_SAT, label: "Fri+Sat (GCC/Israel legacy)" }
+    - { value: SUN_ONLY, label: "Sun only" }
+    - { value: NONE, label: "24×7 / No weekend" }
+
+  # ===========================================================================
+  # CREDIT / CSA / LIMIT ENUMS
+  # ===========================================================================
+  ENUM_LIMIT_TYPE:
+    - { value: NOTIONAL, label: "Gross Notional", icon: dollar-sign }
+    - { value: NET_NOTIONAL, label: "Net Notional", icon: dollar-sign }
+    - { value: PV, label: "Present Value", icon: trending-up }
+    - { value: PFE, label: "Potential Future Exposure", icon: activity }
+    - { value: DV01, label: "DV01", icon: trending-up }
+    - { value: CS01, label: "CS01 (credit)", icon: shield }
+    - { value: VEGA, label: "Vega", icon: activity }
+    - { value: DELTA_NOTIONAL, label: "FX Delta Notional", icon: activity }
+    - { value: TENOR_BUCKET, label: "Per-Tenor Bucket", icon: clock }
+    - { value: PRODUCT, label: "Per-Product", icon: package }
+    - { value: ISSUER, label: "Per-Issuer", icon: building }
+    - { value: SETTLEMENT, label: "Daily Settlement (Herstatt)", icon: shield }
+
+  ENUM_BREACH_ACTION:
+    - { value: WARN, label: "Warn (soft)", color: amber }
+    - { value: BLOCK, label: "Block new trades", color: red }
+    - { value: ESCALATE, label: "Escalate to credit officer", color: red }
+    - { value: AUTO_HEDGE, label: "Auto-hedge down", color: blue }
+    - { value: CLOSE_OUT, label: "Close-out / Termination", color: red }
+
+  ENUM_CSA_TYPE:
+    - { value: ISDA_1994, label: "ISDA 1994 CSA" }
+    - { value: ISDA_2016, label: "ISDA 2016 VM CSA" }
+    - { value: ISDA_2018, label: "ISDA 2018 IM CSA" }
+    - { value: NY_LAW, label: "NY Law CSA" }
+    - { value: ENGLISH_LAW, label: "English Law CSA" }
+    - { value: JAPANESE_LAW, label: "Japanese Law CSA" }
+    - { value: NONE, label: "No CSA (unsecured)" }
+
+  # ===========================================================================
+  # COUNTERPARTY ONBOARDING / CLASSIFICATION
+  # ===========================================================================
+  ENUM_KYC_STATUS:
+    - { value: PENDING, color: amber, icon: clock }
+    - { value: UNDER_REVIEW, color: amber, icon: eye }
+    - { value: APPROVED, color: green, icon: check-circle }
+    - { value: EXPIRED, color: red, icon: clock }
+    - { value: REJECTED, color: red, icon: x-circle }
+    - { value: REMEDIATION, label: "Under Remediation", color: amber, icon: alert-triangle }
+
+  ENUM_RELATIONSHIP_TIER:
+    - { value: PLATINUM, color: violet, icon: star }
+    - { value: GOLD, color: amber, icon: star }
+    - { value: SILVER, color: grey, icon: star }
+    - { value: BRONZE, color: brown, icon: star }
+    - { value: PROSPECT, color: blue, icon: user-plus }
+
+  ENUM_W8_TYPE:
+    - { value: W8BEN, label: "W-8BEN (non-US individual)" }
+    - { value: W8BENE, label: "W-8BEN-E (non-US entity)" }
+    - { value: W8ECI, label: "W-8ECI (US effectively connected)" }
+    - { value: W8EXP, label: "W-8EXP (foreign gov/org)" }
+    - { value: W8IMY, label: "W-8IMY (intermediary)" }
+    - { value: W9, label: "W-9 (US person)" }
+    - { value: NONE, label: "Not Required" }
+
+  ENUM_MIFID_CLASSIFICATION:
+    - { value: ELIGIBLE_CPTY, label: "Eligible Counterparty" }
+    - { value: PROFESSIONAL, label: "Professional Client" }
+    - { value: PROFESSIONAL_ELECTIVE, label: "Professional (Elective)" }
+    - { value: RETAIL, label: "Retail Client" }
+    - { value: NA, label: "N/A (non-EU)" }
+
+  # ===========================================================================
+  # FX-SPECIFIC ENUMS (Slice 2)
+  # ===========================================================================
+  ENUM_FX_DELIVERABILITY:
+    - { value: DELIVERABLE, label: "Deliverable", icon: truck, description: "Physical FX delivery via CLS/correspondent" }
+    - { value: NDF, label: "Non-Deliverable", icon: ban, description: "Cash-settled against fixing (BRL, KRW, INR, TWD, CNY onshore)" }
+    - { value: RESTRICTED, label: "Restricted Deliverable", icon: alert-triangle, description: "Deliverable only via onshore arrangement (CNY onshore)" }
+    - { value: OFFSHORE, label: "Offshore (CNH)", icon: globe, description: "Offshore deliverable sibling of restricted ccy" }
+
+  ENUM_FX_PAIR_CATEGORY:
+    - { value: MAJOR, label: "Major (G10)", icon: star, description: "EURUSD, USDJPY, GBPUSD, USDCHF, AUDUSD, USDCAD, NZDUSD" }
+    - { value: CROSS, label: "G10 Cross", icon: git-merge, description: "EURJPY, EURGBP, AUDJPY etc." }
+    - { value: MINOR, label: "Minor", icon: minus, description: "Less liquid G10 crosses" }
+    - { value: EM, label: "Emerging Market", icon: globe, description: "Deliverable EM (MXN, ZAR, PLN, HUF, CZK, TRY)" }
+    - { value: NDF_EM, label: "NDF Emerging", icon: ban, description: "Non-deliverable EM (BRL, KRW, INR, TWD, PHP, IDR, COP, CLP)" }
+    - { value: EXOTIC, label: "Exotic", icon: alert-triangle, description: "Illiquid frontier markets" }
+    - { value: METAL, label: "Precious Metal", icon: zap, description: "XAU, XAG, XPT, XPD pairs" }
+    - { value: CRYPTO, label: "Crypto (ref only)", icon: bitcoin, description: "BTC, ETH pairs (reference, not trading)" }
+
+  ENUM_QUOTE_CONVENTION:
+    - { value: DIRECT, label: "Direct (USD as quote)", description: "EURUSD, GBPUSD — 1 base = X USD" }
+    - { value: INDIRECT, label: "Indirect (USD as base)", description: "USDJPY, USDCHF — 1 USD = X quote" }
+    - { value: CROSS, label: "Cross (no USD)", description: "EURJPY, EURGBP" }
+
+  ENUM_PREMIUM_CONV:
+    - { value: PIPS_FOREIGN, label: "Pips (foreign ccy)", description: "EUR/USD option: pips in USD" }
+    - { value: PIPS_DOMESTIC, label: "Pips (domestic ccy)", description: "Pips in base ccy" }
+    - { value: PCT_FOREIGN, label: "% Foreign ccy (standard)", description: "% of foreign/quote notional" }
+    - { value: PCT_DOMESTIC, label: "% Domestic ccy", description: "% of domestic/base notional" }
+    - { value: POINTS_DOMESTIC, label: "Points (domestic)", description: "Absolute points on base notional" }
+    - { value: POINTS_FOREIGN, label: "Points (foreign)", description: "Absolute points on quote notional" }
+
+  ENUM_DELTA_CONV:
+    - { value: SPOT, label: "Spot Delta", description: "∂C/∂S (unadjusted)" }
+    - { value: FORWARD, label: "Forward Delta", description: "∂C/∂F — standard for emerging/long-dated" }
+    - { value: SPOT_PA, label: "Spot Premium-Adjusted", description: "Premium paid in foreign — adjusted" }
+    - { value: FORWARD_PA, label: "Forward Premium-Adjusted", description: "Standard for G10 <= 1Y quoted in foreign" }
+
+  ENUM_ATM_TYPE:
+    - { value: ATMF, label: "ATM Forward", description: "Strike = forward rate" }
+    - { value: ATMS, label: "ATM Spot", description: "Strike = spot rate" }
+    - { value: DNS, label: "Delta-Neutral Straddle", description: "K such that call delta = -put delta (G10 standard)" }
+    - { value: FDN, label: "Forward Delta Neutral", description: "K where forward-delta straddle is delta-neutral" }
+    - { value: ZERO_DELTA_STRADDLE, label: "Zero-Delta Straddle", description: "Alt naming for DNS" }
+
+  ENUM_VOL_QUOTE_TYPE:
+    - { value: LOGNORMAL, label: "Lognormal / Black", description: "Standard Black-Scholes vol" }
+    - { value: NORMAL, label: "Normal / Bachelier", description: "Normal vol (bps) — used for negative-rate markets" }
+    - { value: RISK_REVERSAL, label: "Risk Reversal (RR)", description: "Call vol − Put vol at same delta" }
+    - { value: BUTTERFLY, label: "Butterfly (BF/FLY)", description: "0.5 × (Call vol + Put vol) − ATM vol" }
+    - { value: STRANGLE, label: "Strangle (SMS)", description: "Market strangle (sum of OTM call + put)" }
+
+  ENUM_CUT_TIME:
+    - { value: NY_1000, label: "NY 10:00 ET", description: "NY cut — standard for G10 FX options" }
+    - { value: NY_1500, label: "NY 15:00 ET", description: "NY late cut" }
+    - { value: LDN_1500, label: "London 15:00 GMT", description: "ECB cut alternative" }
+    - { value: TOK_1500, label: "Tokyo 15:00 JST", description: "Tokyo cut — standard for JPY crosses" }
+    - { value: ECB_CET, label: "ECB 14:15 CET", description: "ECB fixing time" }
+    - { value: EMTA_LOCAL, label: "EMTA Local Fix", description: "Per-NDF published cut in local-ccy tz" }
+    - { value: BFIX_EOD, label: "Bloomberg BFIX EOD", description: "17:00 NY / 22:00 GMT" }
+
+  ENUM_QUOTE_FIRMNESS:
+    - { value: FIRM, label: "Firm", color: green, icon: check-circle, description: "Dealer commits — click to trade, no last-look" }
+    - { value: SUBJECT, label: "Subject", color: amber, icon: eye, description: "Subject to confirmation / subject to acceptance" }
+    - { value: INDICATIVE, label: "Indicative", color: blue, icon: info, description: "Reference only, not tradeable" }
+    - { value: STREAMING, label: "Streaming", color: cyan, icon: radio, description: "Continuous two-way price" }
+    - { value: LAST_LOOK, label: "Last-Look", color: amber, icon: eye, description: "Firm pending ms-window rejection right" }
+    - { value: FULL_AMOUNT, label: "Full-Amount", color: green, icon: check-square, description: "No last-look, full-amount firm (TW/Fenics style)" }
+
+  ENUM_BARRIER_MONITORING:
+    - { value: CONTINUOUS, label: "Continuous (tick)", description: "Any observed trade triggers" }
+    - { value: DISCRETE, label: "Discrete (fix)", description: "Only at specified fixing times" }
+    - { value: AT_EXPIRY, label: "At Expiry (European)", description: "Barrier checked only at expiry" }
+    - { value: NY_CUT, label: "NY Cut Daily", description: "Once daily at NY 10:00 fixing" }
+
+  ENUM_OPTION_PRICING_MODEL:
+    - { value: GARMAN_KOHLHAGEN, label: "Garman-Kohlhagen", description: "Standard FX BS with foreign rate" }
+    - { value: BLACK_76, label: "Black-76", description: "Futures/forward option" }
+    - { value: VANNA_VOLGA, label: "Vanna-Volga", description: "FX smile-consistent (RR+BF)" }
+    - { value: SABR, label: "SABR", description: "Stochastic vol (rates/swaptions)" }
+    - { value: HESTON, label: "Heston", description: "Stochastic vol FX exotics" }
+    - { value: LOCAL_VOL, label: "Local Vol (Dupire)", description: "Deterministic local vol" }
+    - { value: MC, label: "Monte Carlo", description: "Path-dependent exotics" }
+
+  # ===========================================================================
+  # (Original classification enum continues below)
+  # ===========================================================================
+  ENUM_ENTITY_CLASSIFICATION:
+    - { value: BANK, label: "Bank / Credit Institution" }
+    - { value: BROKER_DEALER, label: "Broker-Dealer" }
+    - { value: ASSET_MANAGER, label: "Asset Manager" }
+    - { value: HEDGE_FUND, label: "Hedge Fund" }
+    - { value: PENSION, label: "Pension Fund" }
+    - { value: INSURANCE, label: "Insurance" }
+    - { value: SOVEREIGN, label: "Sovereign / Central Bank" }
+    - { value: SSA, label: "SSA (Supranational)" }
+    - { value: CORPORATE, label: "Corporate Treasury" }
+    - { value: FAMILY_OFFICE, label: "Family Office" }
+    - { value: HNW, label: "High Net Worth" }
+    - { value: CCP, label: "CCP" }
+    - { value: EXCHANGE, label: "Exchange / Venue" }
+    - { value: CUSTODIAN, label: "Custodian" }
+    - { value: PRIME_BROKER, label: "Prime Broker" }
+    - { value: OTHER, label: "Other" }

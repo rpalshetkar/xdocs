@@ -16,6 +16,24 @@ sections:
   - name: identity
     label: "Party"
     icon: users
+  - name: classification
+    label: "Classification"
+    icon: tag
+  - name: onboarding
+    label: "KYC / Tax"
+    icon: file-check
+  - name: coverage
+    label: "Sales Coverage"
+    icon: user-check
+  - name: panel
+    label: "Authorized Panel"
+    icon: users
+  - name: credit
+    label: "Credit / CSA"
+    icon: shield
+  - name: prime_broker
+    label: "Prime Broker / Give-Up"
+    icon: briefcase
   - name: settlement
     label: "Settlement"
     icon: dollar-sign
@@ -60,15 +78,116 @@ model:
     desk: { facet: true, grid: "3", group: identity }
     region: { facet: true, grid: "3", group: identity, enum: $enums.ENUM_REGION }
 
+    # ── Classification ──
+    entity_classification: { facet: true, grid: "3", group: classification, enum: $enums.ENUM_ENTITY_CLASSIFICATION, description: "Business type" }
+    mifid_classification: { facet: true, grid: "3", group: classification, enum: $enums.ENUM_MIFID_CLASSIFICATION, default: PROFESSIONAL }
+    relationship_tier: { facet: true, grid: "2", group: classification, enum: $enums.ENUM_RELATIONSHIP_TIER, default: SILVER }
+    onboarded_at: { grid: "3", group: classification, description: "Date onboarded (ISO 8601)" }
+    credit_rating: { grid: "2", group: classification, description: "External rating (e.g., A+, BBB)" }
+    internal_rating: { grid: "2", group: classification, description: "Internal credit rating" }
+
+    # ── Onboarding ──
+    kyc_status: { facet: true, grid: "2", group: onboarding, enum: $enums.ENUM_KYC_STATUS, default: PENDING }
+    kyc_approved_at: { grid: "3", group: onboarding, description: "ISO 8601" }
+    kyc_expiry: { grid: "3", group: onboarding, description: "KYC renewal due (ISO 8601)" }
+    kyc_risk_rating: { grid: "2", group: onboarding, enum: [LOW, MEDIUM, HIGH, PROHIBITED], default: LOW }
+    aml_approved: { type: bool, grid: "2", group: onboarding, default: false }
+    sanctions_screened_at: { grid: "3", group: onboarding, description: "Last OFAC/EU/UK sanctions screen" }
+    fatca_status: { grid: "3", group: onboarding, enum: [COMPLIANT, NONCOMPLIANT, EXEMPT, PENDING] }
+    w8_type: { grid: "2", group: onboarding, enum: $enums.ENUM_W8_TYPE, default: NONE }
+    w8_expiry: { grid: "3", group: onboarding, description: "W-8 form expiry" }
+    giin: { grid: "3", group: onboarding, description: "Global Intermediary ID Number (FATCA)" }
+    crs_status: { grid: "3", group: onboarding, enum: [REPORTABLE, NON_REPORTABLE, EXEMPT] }
+
+    # ── Sales Coverage ──
+    sales_coverage_id: { grid: "3", group: coverage, description: "Primary RM / salesperson" }
+    sales_backup_id: { grid: "3", group: coverage, description: "Backup salesperson" }
+    coverage_region: { grid: "2", group: coverage, enum: $enums.ENUM_REGION }
+    coverage_team: { grid: "3", group: coverage, description: "Coverage team / desk" }
+    last_rfq_at: { grid: "3", group: coverage, description: "Last RFQ received" }
+    last_trade_at: { grid: "3", group: coverage, description: "Last executed trade" }
+    ytd_volume: { type: float, grid: "3", group: coverage, description: "YTD traded notional (USD equiv)" }
+
+    # ── Authorized Panel ──
+    authorized_traders:
+      type: list
+      grid: "12"
+      group: panel
+      collapsed: true
+      description: "Traders permitted to transact on behalf of this party"
+      items:
+        type: dict
+        items:
+          name: { grid: "4" }
+          email: { grid: "4" }
+          role: { grid: "2", enum: [TRADER, PM, OPS, SIGNATORY] }
+          products: { type: list, grid: "6", widget: tags, description: "Products authorized" }
+          daily_limit: { type: float, grid: "3", description: "Per-trader daily limit" }
+          effective_from: { grid: "3" }
+          effective_to: { grid: "3" }
+
+    signatories:
+      type: list
+      grid: "12"
+      group: panel
+      collapsed: true
+      description: "Legal signatories for confirmations / amendments"
+      items:
+        type: dict
+        items:
+          name: { grid: "5" }
+          title: { grid: "4" }
+          signing_limit: { type: float, grid: "3" }
+          scope: { type: list, grid: "6", widget: tags, description: "Document types (ISDA, CSA, Confirm)" }
+
+    # ── Credit / CSA ──
+    default_credit_limit_id: { grid: "3", group: credit, ref: credit_limits.name, description: "Primary credit limit" }
+    is_netting_eligible: { type: bool, grid: "2", group: credit, default: false, description: "Eligible for close-out netting" }
+    netting_agreement_ref: { grid: "4", group: credit, description: "Master netting agreement ref" }
+    is_csa_agreement: { type: bool, grid: "2", group: credit, default: false, description: "Has CSA/collateral agreement" }
+    csa_id: { grid: "3", group: credit, description: "CSA agreement reference" }
+    umr_in_scope: { type: bool, grid: "2", group: credit, default: false, description: "Subject to Uncleared Margin Rules (UMR)" }
+    umr_phase: { grid: "2", group: credit, enum: [PHASE_1, PHASE_2, PHASE_3, PHASE_4, PHASE_5, PHASE_6, OUT_OF_SCOPE] }
+    clearing_eligible: { type: bool, grid: "3", group: credit, default: false, description: "Eligible for CCP clearing" }
+    preferred_ccps: { type: list, grid: "6", group: credit, widget: tags, description: "Preferred CCPs for clearing" }
+
+    # ── Prime Broker / Give-Up ──
+    prime_broker_id: { grid: "4", group: prime_broker, ref: entities.name, description: "Prime broker (FX/Bonds PB)" }
+    give_up_broker_id: { grid: "4", group: prime_broker, ref: entities.name, description: "Executing broker we give-up to" }
+    give_up_agreement_ref: { grid: "4", group: prime_broker, description: "Give-up/EBG agreement ref" }
+    dma_enabled: { type: bool, grid: "2", group: prime_broker, default: false, description: "Direct Market Access" }
+    algo_enabled: { type: bool, grid: "2", group: prime_broker, default: false, description: "Algo strategies available" }
+    venue_memberships: { type: list, grid: "8", group: prime_broker, widget: tags, enum: $enums.ENUM_VENUE, description: "Venues this party trades on" }
+
     # ── Settlement ──
     funding_ccy: { grid: "3", group: settlement, enum: $enums.ENUM_CCY }
-    default_ssi_id: { grid: "4", group: settlement, description: "Default settlement instruction ID" }
+    default_ssi_id: { grid: "4", group: settlement, ref: ssis.alias, description: "Default settlement instruction" }
+    ssi_overrides:
+      type: list
+      grid: "12"
+      group: settlement
+      collapsed: true
+      description: "Per-currency or per-product SSI overrides"
+      items:
+        type: dict
+        items:
+          ccy: { grid: "2", enum: $enums.ENUM_CCY }
+          product: { grid: "3", enum: $enums.ENUM_PRODUCT_TYPE }
+          ssi_id: { grid: "4", ref: ssis.alias }
+          priority: { type: int, grid: "2", default: 0 }
+    custodian_id: { grid: "4", group: settlement, ref: entities.name, description: "Custodian/sub-custodian" }
+    cls_member: { type: bool, grid: "2", group: settlement, default: false, description: "Direct CLS settlement member" }
 
     # ── Legal ──
-    is_netting_eligible: { type: bool, grid: "3", group: legal, default: false, description: "Eligible for close-out netting" }
-    is_csa_agreement: { type: bool, grid: "3", group: legal, default: false, description: "Has CSA/collateral agreement" }
-    jurisdiction: { grid: "3", group: legal }
+    jurisdiction: { grid: "3", group: legal, description: "Incorporation jurisdiction" }
+    governing_law: { grid: "3", group: legal, enum: [NY_LAW, ENGLISH_LAW, JAPANESE_LAW, SINGAPORE_LAW, OTHER] }
+    isda_master_ref: { grid: "3", group: legal, description: "ISDA Master Agreement ref" }
+    isda_master_date: { grid: "3", group: legal, description: "ISDA Master Agreement date" }
+    gmra_ref: { grid: "3", group: legal, description: "Global Master Repurchase Agreement ref" }
+    gmsla_ref: { grid: "3", group: legal, description: "Global Master Securities Lending Agreement ref" }
 
     # ── Hierarchy ──
     parent_party_id: { grid: "4", group: hierarchy, ref: entities.name, description: "Parent entity" }
+    ultimate_parent_id: { grid: "4", group: hierarchy, ref: entities.name, description: "Ultimate group parent" }
+    group_lei: { grid: "4", group: hierarchy, description: "Group-level LEI (for aggregation)" }
     subsidiaries: { type: list, grid: "6", group: hierarchy, widget: tags, description: "Subsidiary party IDs" }

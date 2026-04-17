@@ -23,6 +23,15 @@ sections:
   - name: terms
     label: "Terms"
     icon: file-text
+  - name: conventions
+    label: "Conventions"
+    icon: settings-2
+  - name: schedules_ref
+    label: "Schedules"
+    icon: calendar
+  - name: listing
+    label: "Listing"
+    icon: bar-chart
   - name: system
     label: "System"
     icon: settings
@@ -90,6 +99,66 @@ model:
     ccy: { facet: true, grid: "3", group: terms, enum: $enums.ENUM_CCY }
     issue_date: { grid: "3", group: terms }
     maturity_date: { grid: "3", group: terms }
+    first_settle_date: { grid: "3", group: terms, description: "First settlement date" }
+    dated_date: { grid: "3", group: terms, description: "Accrual start date" }
     issuer_id: { grid: "3", group: terms, ref: entities.name, description: "Issuing entity" }
-    country: { grid: "3", group: terms }
+    guarantor_id: { grid: "3", group: terms, ref: entities.name, description: "Guarantor (if any)" }
+    country: { grid: "2", group: terms }
     sector: { grid: "3", group: terms }
+    sub_sector: { grid: "3", group: terms, description: "GICS sub-industry" }
+    seniority: { grid: "3", group: terms, enum: [SENIOR_SECURED, SENIOR_UNSECURED, SUBORDINATED, JUNIOR_SUB, PREFERRED, COVERED, ABS] }
+
+    # ── Conventions (calendar & business-day rules) ──
+    settlement_calendar_id: { grid: "3", group: conventions, ref: calendars.name, description: "Settlement calendar" }
+    fixing_calendar_id: { grid: "3", group: conventions, ref: calendars.name, description: "Fixing/coupon calendar" }
+    exchange_calendar_id: { grid: "3", group: conventions, ref: calendars.name, description: "Listed trading calendar (if applicable)" }
+    business_day_conv: { grid: "3", group: conventions, enum: $enums.ENUM_BUSINESS_DAY_CONV, default: MODIFIED_FOLLOWING }
+    payment_bd_conv: { grid: "3", group: conventions, enum: $enums.ENUM_BUSINESS_DAY_CONV, description: "Payment-date adjustment" }
+    day_count: { grid: "3", group: conventions, enum: $enums.ENUM_DAY_COUNT, description: "Day-count fraction" }
+    settlement_days: { type: int, grid: "2", group: conventions, description: "T+N convention" }
+    coupon_frequency: { grid: "3", group: conventions, enum: [ANNUAL, SEMIANNUAL, QUARTERLY, MONTHLY, WEEKLY, DAILY, AT_MATURITY, IRREGULAR] }
+    accrual_basis: { grid: "3", group: conventions, description: "Accrual convention details" }
+    price_quote_type: { grid: "3", group: conventions, enum: [CLEAN, DIRTY, YIELD, SPREAD, DISCOUNT, DISCOUNT_MARGIN], description: "Quote convention" }
+    yield_convention: { grid: "3", group: conventions, enum: [ANNUAL, SEMIANNUAL, MONEY_MARKET, CONTINUOUS, DISCOUNT], description: "Yield compounding" }
+
+    # ── Schedules (linked schedule records / embedded terms) ──
+    coupon_schedule_id: { grid: "4", group: schedules_ref, description: "Ref to coupon schedule event set" }
+    amort_schedule_id: { grid: "4", group: schedules_ref, description: "Ref to amortization schedule" }
+    call_schedule:
+      type: list
+      grid: "12"
+      group: schedules_ref
+      collapsed: true
+      description: "Call/put window terms"
+      items:
+        type: dict
+        items:
+          kind: { grid: "2", enum: [CALL, PUT, MAKE_WHOLE, REGULATORY], default: CALL }
+          first_date: { grid: "3" }
+          last_date: { grid: "3" }
+          price: { type: float, grid: "2", description: "Call price (% of par)" }
+          notice_days: { type: int, grid: "2" }
+    sink_schedule:
+      type: list
+      grid: "12"
+      group: schedules_ref
+      collapsed: true
+      description: "Mandatory sinking-fund redemptions"
+      items:
+        type: dict
+        items:
+          date: { grid: "3" }
+          pct_face: { type: float, grid: "3", description: "% of original face redeemed" }
+
+    # ── Listing ──
+    primary_venue: { grid: "3", group: listing, description: "Primary listing MIC" }
+    listed_venues: { type: list, grid: "6", group: listing, widget: tags, description: "All listed MICs" }
+    lot_size: { type: float, grid: "3", group: listing, description: "Minimum denomination / lot" }
+    min_trade_size: { type: float, grid: "3", group: listing, description: "Minimum tradable size" }
+    tick_size: { type: float, grid: "3", group: listing, description: "Min price increment" }
+    trading_hours: { grid: "4", group: listing, description: "e.g., 09:30–16:00 America/New_York" }
+    block_threshold: { type: float, grid: "3", group: listing, description: "Block trade reporting threshold" }
+
+    # ── System ──
+    xrefs_last_synced: { grid: "3", group: system, description: "Last xrefs reconciliation timestamp" }
+    golden_source: { grid: "3", group: system, description: "Authoritative source system" }

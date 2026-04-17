@@ -163,17 +163,64 @@ TRADE events are **created by the matching engine** (not by users) when correlat
 
 ## Datasets
 
-| Dataset         | Records | Key       | Mode                               | Features                                                |
-| --------------- | ------- | --------- | ---------------------------------- | ------------------------------------------------------- |
-| `entities`      | 20      | entity_id | Standard (cached)                  | Legal entities, CCPs, brokers with LEI                  |
-| `books`         | 30      | book_id   | Standard (cached)                  | Trading books/portfolios per entity                     |
-| `fpmls`         | 15      | fpml_id   | Standard (cached)                  | ISDA FpML product templates                             |
-| `events`        | ~200    | event_id  | Streaming (2s, append, limit: 100) | Unified event log — 29 event types, polymorphic payload |
-| `trade_blotter` | —       | —         | View (streaming)                   | Events enriched with entity and book context            |
+| Dataset         | Records | Key       | Mode                               | Features                                                                    |
+| --------------- | ------- | --------- | ---------------------------------- | --------------------------------------------------------------------------- |
+| `entities`      | 20      | entity_id | Standard (cached)                  | Legal entities, CCPs, brokers with LEI                                      |
+| `books`         | 30      | book_id   | Standard (cached)                  | Trading books/portfolios per entity                                         |
+| `fpmls`         | 15      | fpml_id   | Standard (cached)                  | ISDA FpML product templates                                                 |
+| `calendars`     | ~40     | cal_id    | Standard (cached)                  | Settlement/fixing/exchange/custody calendars w/ holidays                    |
+| `ssis`          | ~60     | ssi_id    | Standard (cached)                  | Standing Settlement Instructions — CLS, correspondents                      |
+| `credit_limits` | ~50     | limit_id  | Standard (cached)                  | Credit / CSA / margin agreements + live utilization                         |
+| `fx_pairs`      | ~60     | pair_id   | Standard (cached)                  | FX pair master — pip, spot offset, deliverability, CLS, fixing, option conv |
+| `events`        | ~200    | event_id  | Streaming (2s, append, limit: 100) | Unified event log — 31 event types, polymorphic payload                     |
+| `trade_blotter` | —       | —         | View (streaming)                   | Events enriched with entity and book context                                |
 
-**Active schemas (6):** `_enums.yaml`, `_system.yaml`, `entity.yaml`, `book.yaml`, `fpml.yaml`, `event.yaml`
+**Active schemas (10):** `_enums.yaml`, `_system.yaml`, `entity.yaml`, `book.yaml`, `fpml.yaml`, `event.yaml`, `calendar.yaml`, `ssi.yaml`, `credit_limit.yaml`, `fx_pair.yaml`
 
-**Event payload schemas (29):** `_event_payloads/{rfq, quote, order, client_rfq, sales_booking, trading_booking, obo_ticket, stp_message, trading_accept, broker_fill, clearing_msg, affirm_msg, giveup_notice, giveup_accept, match, unmatch, alloc_split, settlement_instr, margin_call, net_settlement, amendment, cancel_request, cancel_confirm, novation_request, novation_accept, exercise_notice, internal_transfer, position_snapshot, trade, risk_measure, schedule_event}.yaml`
+### Reference-data depth (Slice 1)
+
+| Schema              | Purpose                                                                                                                                                                                                                                                                                                                                             |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `calendar`          | Atomic holiday/business-day/fixing/exchange calendars. Composite (e.g., EURUSD settlement) via intersect. FpML BusinessCenter, ISDA, BBG CDR external refs.                                                                                                                                                                                         |
+| `ssi`               | Per-party × per-currency payment routing. CLS membership, correspondent chain (fields :56A/:57A/:59/:70), clearing system codes (FEDWIRE_ABA, CHAPS, TARGET2, SIC), Omgeo ALERT / DTCC CTM xrefs.                                                                                                                                                   |
+| `credit_limit`      | Limit scopes (NOTIONAL/PV/PFE/DV01/CS01/VEGA/TENOR_BUCKET), utilization refresh, CSA terms (IA/threshold/MTA/rounding, eligible collateral w/ haircuts), breach actions (WARN/BLOCK/ESCALATE/AUTO_HEDGE). UMR phase tracking.                                                                                                                       |
+| `party` (ext.)      | New sections: classification (MiFID/entity type/rating), onboarding (KYC/FATCA/W-8/GIIN/CRS), coverage (RM/sales/YTD volume), authorized_traders[] + signatories[] panels, credit (default_credit_limit_id, netting, UMR phase), prime_broker (PB, give-up, DMA, algo, venue memberships), settlement (ssi_overrides[] per ccy/product, custodian). |
+| `instrument` (ext.) | New sections: conventions (calendar refs, day-count, business-day conv, settlement days, price/yield quote type), schedules (coupon/amort/call[]/sink[]), listing (venue MIC, lot/tick, block threshold, trading hours).                                                                                                                            |
+
+### FX depth (Slice 2)
+
+| Schema / Overlay               | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fx_pair`                      | Currency-pair reference master. Pip factor (0.0001 / 0.01), spot offset (T+1 USDCAD, T+2 most), deliverability (DELIVERABLE/NDF/RESTRICTED/OFFSHORE), category (MAJOR/CROSS/MINOR/EM/NDF_EM/EXOTIC/METAL), default fixing source + fallback, EMTA template ref, CLS eligibility + cutoff, default premium/delta/ATM/cut conventions, smile deltas, venues, block threshold, full-amount flag, last-look ms. BBG ticker + Reuters RIC.                            |
+| `_partials/fx_conventions`     | Shared `conventions{}` block embedded in FX payloads — carries pair_id, pip factor, calendar intersect, fixing source, premium/delta conv, cut time, CLS status, quote firmness at trade time.                                                                                                                                                                                                                                                                   |
+| `_overlays/fx.yaml` (ext.)     | Spot/fwd/swap (near/far dates, broken-date flag, swap points), full NDF block (fixing source + fallback + EMTA template + settlement ccy + lag), CLS lifecycle (ELIGIBLE→SUBMITTED→MATCHED→SETTLED), FX compensation (late-settle/broken-spot), precious-metals loco/allocated.                                                                                                                                                                                  |
+| `_overlays/option.yaml` (ext.) | Premium conventions (PIPS/PCT_FOREIGN/PCT_DOMESTIC/POINTS), delta conventions (SPOT/FORWARD/SPOT_PA/FORWARD_PA), ATM types (ATMF/ATMS/DNS/FDN), vol quote type, 25D/10D risk-reversal + butterfly, Greeks + vanna/volga, full barrier taxonomy (KI/KO/DKI/DKO/OT/NT/DOT/DNT), barrier monitoring (continuous/discrete/at-expiry/NY-cut), pin-risk flag, auto-exercise threshold, quanto block, pricing model enum (Garman-Kohlhagen/Vanna-Volga/SABR/Heston/MC). |
+
+**Event payload schemas (31):** original 29 + `stream_quote.yaml` (streaming tick w/ firmness + last-look + hit tracking) + `fx_fixing.yaml` (fixing event w/ EMTA disruption, fallback chain, downstream trigger refs).
+
+### Workflow depth (Slice 3)
+
+BBG Terminal / Tradeweb / MarketAxess-style dealer workflows, each wired as an event-driven pipeline with a named correlation primitive in `assembly.yaml`.
+
+| Pipeline                | Trigger                                     | Primitive(s)                         | BBG / TW parity                                                          |
+| ----------------------- | ------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------ |
+| `on_stream_quote_hit`   | `STREAM_QUOTE` with `status=HIT/LIFTED`     | CORRELATION (tick → ORDER)           | TradeWeb Streaming · Bloomberg BMTFQ click-to-trade · Fenics full-amount |
+| `on_axe_response`       | `AXE` state change or RFQ citing `axe_id`   | CORRELATION 1:N (axe → inquiries)    | BBG MSG1/MSG2 axes · TW Axes board · MarketAxess IOI                     |
+| `on_rfq_competitive`    | QUOTE on multi-dealer RFQ OR RFQ acceptance | AGGREGATION + OVERRIDE (winner pick) | TW MLQ · Bloomberg ALLQ · MarketAxess Open Trading                       |
+| `on_rfq_expired`        | Scheduled (30s) — RFQs past `valid_until`   | OVERRIDE (timer → EXPIRED)           | TIF timeout on any RFQ-based venue                                       |
+| `on_portfolio_trade`    | RFQ with `is_portfolio=true`                | ALLOCATION (basket→lines) + AGG      | TW Portfolio Trading · MarketAxess Portfolio+                            |
+| `on_fx_fixing_resolved` | `FX_FIXING` with `status=FIXED`             | AGGREGATION 1:N (fix → downstream)   | Bloomberg BFIX / WMR processing · EMTA NDF disruption handling           |
+| `on_block_allocation`   | `TRADE` with `is_block=true`                | ALLOCATION (block → splits + avg px) | Bloomberg AIM · Omgeo CTM post-trade                                     |
+
+**Correlation primitives added to assembly.yaml**: `stream_to_trade`, `axe_to_rfq`, `competitive_aggregation`, `portfolio_basket`, `fixing_propagation`, `block_alloc_fanout`, `rfq_tif_expiry`.
+
+**Workflow guarantees**:
+
+- **Last-look transparency** — every stream hit logs `last_look_outcome` (ACCEPTED / REJECTED / TIMED_OUT) with rejection reason (STALE_PRICE / PRICE_MOVED / SIZE / CREDIT / COMPLIANCE) in the same event chain.
+- **Cover spread capture** — competitive RFQ losers record `cover_spread_pips` against the winner for TCA.
+- **All-or-none portfolio** — basket won't fan out into bookings unless a single dealer quotes every line item.
+- **Fixing propagation idempotency** — fixing event captures `triggered_settlements[]`, `triggered_exercises[]`, `triggered_barriers[]` to prevent duplicate processing on re-runs.
+- **Credit pre-check** — stream hit pipeline runs a soft/hard-cap credit check against `credit_limits` before booking; hard breach blocks the order.
 
 ## Server
 

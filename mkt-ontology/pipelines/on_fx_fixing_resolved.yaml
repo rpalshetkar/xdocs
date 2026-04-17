@@ -1,0 +1,210 @@
+# =============================================================================
+# FLOW: on_fx_fixing_resolved
+# =============================================================================
+# Trigger: FX_FIXING event with status=FIXED (source published)
+# Action: Propagate to all downstream users of that fixing:
+#         - NDF trades → generate SETTLEMENT_INSTR
+#         - Option barriers → check breach (if barrier_monitoring=NY_CUT / FIX)
+#         - European options @ cut time → auto-exercise if ITM
+#         - MTM risk refresh on affected positions
+# Primitive: AGGREGATION (fixing → N downstream events)
+# Scenarios: NDF_FIXING, BARRIER_FIX, AUTO_EXERCISE
+# =============================================================================
+
+flow: on_fx_fixing_resolved
+mode: inline
+on_error: dlq
+category: lifecycle
+description: FX fixing published → propagate to NDF settlement, barriers, auto-exercise
+
+source:
+  type: repo
+  repo: events
+  filter: "event_type == 'FX_FIXING' AND payload.status == 'FIXED'"
+
+steps:
+  - name: load_fixing
+    transform:
+      fixing_id: "$.event_id"
+      pair_id: "$.payload.pair_id"
+      fixing_date: "$.payload.fixing_date"
+      fixing_source: "$.payload.fixing_source"
+      rate: "$.payload.rate"
+      is_disruption: "$.payload.is_disruption_event"
+
+  - name: find_ndf_trades_awaiting
+    description: NDF trades with this fixing_date + pair + source
+    transform:
+      ndf_trades: >-
+        $xu.find_events({
+          event_type: 'TRADE',
+          status: ['CONFIRMED', 'CLEARED'],
+          payload: {
+            product_type: 'FX_NDF',
+            ccy_pair: $.pair_id,
+            fixing_date: $.fixing_date,
+            fixing_source: $.fixing_source
+          }
+        })
+      ndf_count: "$xu.len($.ndf_trades)"
+
+  - name: generate_ndf_settlements
+    filter: "$.ndf_count > 0"
+    description: One SETTLEMENT_INSTR per NDF trade, net-cash in settlement ccy
+    transform:
+      ndf_settlements:
+        from: "$.ndf_trades"
+        map:
+          event_type: SETTLEMENT_INSTR
+          source: MATCHING_ENG
+          status: PENDING
+          product_type: FX_NDF
+          cpty_id: "$.cpty_id"
+          payload:
+            trade_event_id: "$.event_id"
+            settlement_type: CASH
+            fixing_event_id: "$.fixing_id"
+            fixing_rate: "$.rate"
+            agreed_rate: "$.payload.rate"
+            notional: "$.payload.notional"
+            ccy_pair: "$.payload.ccy_pair"
+            settlement_ccy: "$.payload.ndf_settlement_ccy"
+            settlement_amount: >-
+              $xu.ndf_net_amount($.payload.notional, $.payload.rate,
+                                 $.rate, $.payload.direction,
+                                 $.payload.ndf_settlement_ccy)
+            value_date: "$.payload.ndf_settlement_date"
+          links:
+            - event_id: "$.event_id"
+              rel: SETTLES
+              role: CHILD
+            - event_id: "$.fixing_id"
+              rel: PRICED_FROM
+              role: CHILD
+
+  - name: find_fixing_barriers
+    description: Live option barriers with matching fix observation
+    transform:
+      observed_barriers: >-
+        $xu.find_events({
+          event_type: 'TRADE',
+          status: ['CONFIRMED', 'CLEARED'],
+          payload: {
+            product_type: 'FX_OPTION',
+            ccy_pair: $.pair_id,
+            barrier_status: 'MONITORING',
+            barrier_monitoring: ['NY_CUT', 'DISCRETE']
+          }
+        })
+
+  - name: evaluate_barriers
+    filter: "$xu.len($.observed_barriers) > 0"
+    transform:
+      barrier_updates:
+        from: "$.observed_barriers"
+        map:
+          event_id: "$.event_id"
+          breach: >-
+            $xu.barrier_breached($.payload.barrier_type,
+                                 $.payload.barrier_level,
+                                 $.payload.barrier_upper,
+                                 $.payload.barrier_lower,
+                                 $.rate)
+          update:
+            payload:
+              barrier_status: "$xu.if($.breach, 'BREACHED', $.payload.barrier_status)"
+              barrier_breach_date: "$xu.if($.breach, $.fixing_date, null)"
+              last_observation_rate: "$.rate"
+              last_observation_fixing_id: "$.fixing_id"
+
+  - name: find_european_options_at_cut
+    description: European options expiring today with matching cut_time
+    transform:
+      expiring_options: >-
+        $xu.find_events({
+          event_type: 'TRADE',
+          status: ['CONFIRMED', 'CLEARED'],
+          payload: {
+            product_type: 'FX_OPTION',
+            ccy_pair: $.pair_id,
+            exercise_style: 'EUROPEAN',
+            expiry_date: $.fixing_date
+          }
+        })
+
+  - name: auto_exercise_itm
+    filter: "$xu.len($.expiring_options) > 0"
+    transform:
+      exercise_notices:
+        from: "$.expiring_options"
+        map:
+          event_type: EXERCISE_NOTICE
+          source: MATCHING_ENG
+          status: PENDING
+          payload:
+            option_event_id: "$.event_id"
+            fixing_event_id: "$.fixing_id"
+            fixing_rate: "$.rate"
+            is_itm: >-
+              $xu.option_itm($.payload.option_type, $.payload.strike, $.rate)
+            itm_amount: >-
+              $xu.if($.is_itm,
+                     $xu.option_intrinsic($.payload.option_type,
+                                          $.payload.strike, $.rate,
+                                          $.payload.notional), 0)
+            exercise_style_used: >-
+              $xu.if($.is_itm, 'AUTOEXERCISE_ITM', 'NOT_EXERCISED')
+            cut_time: "$.payload.cut_time"
+          links:
+            - event_id: "$.event_id"
+              rel: MEASURES
+              role: CHILD
+            - event_id: "$.fixing_id"
+              rel: PRICED_FROM
+              role: CHILD
+
+  - name: refresh_mtm
+    description: Flag positions for MTM recompute using new fixing
+    transform:
+      affected_positions: >-
+        $xu.find_events({
+          event_type: 'POSITION_SNAPSHOT',
+          snap: 'LIVE',
+          payload: { ccy_pair: $.pair_id }
+        })
+      mtm_refresh_count: "$xu.len($.affected_positions)"
+
+sinks:
+  - type: repo
+    repo: events
+    mode: save_many
+    filter: "$.ndf_settlements != null"
+    map: "$.ndf_settlements"
+  - type: repo
+    repo: events
+    mode: save_many
+    filter: "$.exercise_notices != null"
+    map: "$.exercise_notices"
+  - type: repo
+    repo: events
+    mode: update_many
+    filter: "$.barrier_updates != null"
+    map: "$.barrier_updates"
+  - type: repo
+    repo: events
+    mode: update
+    target_event_id: "$.fixing_id"
+    map:
+      payload:
+        triggered_settlements: "$xu.map($.ndf_settlements, s => s.event_id)"
+        triggered_exercises: "$xu.map($.exercise_notices, x => x.event_id)"
+        triggered_barriers: "$xu.filter_ids($.barrier_updates, b => b.breach == true)"
+        impacted_trade_count: "$xu.add($.ndf_count, $xu.len($.expiring_options))"
+  - type: event
+    channel: xds:xftws:fixing_resolved
+  - type: websocket
+    channel: "xds:xftws:fixing:${pair_id}"
+    event_type: fixing_resolved
+  - type: event
+    channel: xds:xftws:mtm_refresh_required
+    filter: "$.mtm_refresh_count > 0"

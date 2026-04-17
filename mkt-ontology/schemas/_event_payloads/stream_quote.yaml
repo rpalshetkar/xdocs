@@ -1,0 +1,65 @@
+# =============================================================================
+# STREAM_QUOTE Payload — Streaming quote tick (BBG/TW/Fenics style)
+# =============================================================================
+# event_type: STREAM_QUOTE
+# Flow: Dealer publishes continuous two-way pricing (spot, fwd, swap, NDF).
+# Client clicks bid/ask → becomes an ORDER with stream_tick_id reference.
+# High-frequency: this payload is deliberately skinny. Pair/calendar/conv
+# defaults resolved via fx_pair ref.
+# =============================================================================
+blueprint: partial
+description: "Streaming quote tick — firm/subject/last-look two-way pricing"
+
+fields:
+  # ── Stream identity ──
+  stream_id:          { type: str, required: true, description: "Streaming session ID (stable across ticks)" }
+  tick_seq:           { type: int, required: true, description: "Monotonic tick sequence within stream" }
+  tick_ts:            { type: str, widget: datetime, required: true, description: "Tick timestamp (ISO 8601 with ms)" }
+  prev_tick_id:       { type: str, description: "Previous tick event_id (form a chain)" }
+
+  # ── Pair / product ──
+  pair_id:            { type: str, ref: fx_pairs.symbol, description: "FX pair" }
+  product_type:       { type: str, enum: $enums.ENUM_PRODUCT_TYPE, default: FX_SPOT }
+  tenor:              { type: str, description: "Tenor (SPOT, 1W, 1M, 3M, 1Y, broken date)" }
+  value_date:         { type: date, description: "Computed value date for this tick" }
+
+  # ── Two-way price ──
+  bid_price:          { type: float, required: true, description: "Bid price / rate" }
+  ask_price:          { type: float, required: true, description: "Ask price / rate" }
+  mid_price:          { type: float, description: "Computed mid" }
+  spread_pips:        { type: float, description: "Ask − Bid in pips" }
+  bid_size:           { type: float, description: "Size firm on bid (base ccy)" }
+  ask_size:           { type: float, description: "Size firm on ask (base ccy)" }
+
+  # ── Firmness / last-look ──
+  firmness:           { type: str, required: true, enum: $enums.ENUM_QUOTE_FIRMNESS, default: STREAMING }
+  last_look_ms:       { type: int, description: "Last-look window in ms (0 = full-amount firm)" }
+  full_amount:        { type: bool, default: false, description: "No-last-look, full-amount available" }
+  tiered_tier:        { type: str, description: "Pricing tier if tiered (e.g., PLATINUM, GOLD)" }
+
+  # ── Forward / NDF context ──
+  fwd_points_bid:     { type: float, description: "Bid forward points (if forward tick)" }
+  fwd_points_ask:     { type: float, description: "Ask forward points" }
+  all_in_bid:         { type: float, description: "Spot + fwd points bid" }
+  all_in_ask:         { type: float, description: "Spot + fwd points ask" }
+
+  # ── Venue / source ──
+  venue:              { type: str, enum: $enums.ENUM_VENUE }
+  venue_stream_id:    { type: str, description: "Venue-assigned stream ID" }
+  client_entity_id:   { type: str, ref: entities.name, description: "Client receiving this tier (if private)" }
+  visibility:         { type: str, enum: [PUBLIC, TIERED, PRIVATE], default: TIERED }
+
+  # ── State ──
+  status:             { type: str, enum: [LIVE, UPDATED, WITHDRAWN, HIT, LIFTED, STALE], default: LIVE }
+  withdrawn_reason:   { type: str, enum: [PRICE_REFRESH, RISK_LIMIT, MARKET_MOVE, MANUAL, DISCONNECT] }
+
+  # ── Trade-away / hit reference ──
+  hit_event_id:       { type: str, description: "If HIT/LIFTED, event_id of the resulting ORDER" }
+  hit_side:           { type: str, enum: [BID, ASK], description: "Side that was hit" }
+  hit_size:           { type: float, description: "Size actually dealt" }
+  last_look_outcome:  { type: str, enum: [ACCEPTED, REJECTED, TIMED_OUT], description: "Last-look resolution" }
+  rejection_reason:   { type: str, enum: [STALE_PRICE, PRICE_MOVED, SIZE_TOO_LARGE, CREDIT, COMPLIANCE, OTHER] }
+
+  # ── Skew snapshot (optional, for full-book streams) ──
+  skew_rr_25d:        { type: float, description: "25D risk reversal snapshot at this tick (FX options streams)" }
+  skew_bf_25d:        { type: float, description: "25D butterfly snapshot" }

@@ -1,0 +1,135 @@
+# =============================================================================
+# FX_PAIR — Currency-pair reference master
+# =============================================================================
+# One row per traded FX pair. The single most-queried table on an FX desk:
+# every spot/forward/swap/NDF/option booking resolves its pip factor, spot
+# offset, fixing source, calendar intersection, CLS eligibility, and
+# deliverability from here. Use this schema as the source of truth — do NOT
+# duplicate pair conventions into event payloads.
+# =============================================================================
+blueprint: schema
+kind: FXPair
+qualifier: "ftp-fxp-"
+xid: pair_id|symbol
+xns: [id, xid]
+description: "FX currency-pair reference — pip factor, deliverability, fixing, CLS, conventions"
+icon: repeat
+
+sections:
+  - name: identity
+    label: "Pair"
+    icon: repeat
+  - name: conventions
+    label: "Market Conventions"
+    icon: settings-2
+  - name: calendars
+    label: "Calendars & Fixing"
+    icon: calendar
+  - name: settlement
+    label: "Settlement / CLS"
+    icon: shield
+  - name: option_conv
+    label: "Option Conventions"
+    icon: target
+  - name: trading
+    label: "Trading"
+    icon: trending-up
+  - name: system
+    label: "System"
+    icon: settings
+
+views:
+  - type: table
+    label: "FX Pair Grid"
+    icon: table
+    default: true
+  - type: card
+    label: "Pair Cards"
+    icon: layout-grid
+    title: symbol
+    subtitle: category
+    badge: deliverability
+  - type: bar
+    label: "By Category"
+    icon: bar-chart
+    x: category
+    y: $count
+
+model:
+  fields:
+    # ── Identity ──
+    pair_id: { key: true, rank: hero, grid: "3", group: identity, col: "2<", placeholder: "FTP-FXP-EURUSD" }
+    symbol: { fuzzy: true, grid: "2", rank: hero, group: identity, card: title, col: "1<", placeholder: "EURUSD" }
+    iso_code: { grid: "2", group: identity, placeholder: "EUR/USD", description: "ISO slashed form" }
+    base_ccy: { facet: true, grid: "2", rank: primary, group: identity, enum: $enums.ENUM_CCY }
+    quote_ccy: { facet: true, grid: "2", rank: primary, group: identity, enum: $enums.ENUM_CCY }
+    category: { facet: true, grid: "2", rank: primary, group: identity, card: subtitle, enum: $enums.ENUM_FX_PAIR_CATEGORY }
+    deliverability: { facet: true, grid: "3", rank: primary, group: identity, card: badge, enum: $enums.ENUM_FX_DELIVERABILITY, default: DELIVERABLE }
+    status: { facet: true, grid: "2", group: identity, enum: $enums.ENUM_ENTITY_STATUS, default: ACTIVE }
+    offshore_sibling: { grid: "3", group: identity, ref: fx_pairs.symbol, description: "Offshore equivalent (USDCNY → USDCNH)" }
+
+    # ── Market Conventions ──
+    quote_convention: { grid: "3", group: conventions, enum: $enums.ENUM_QUOTE_CONVENTION, description: "DIRECT / INDIRECT / CROSS" }
+    pip_decimals: { type: int, grid: "2", group: conventions, default: 4, description: "Pip position (4 for EURUSD, 2 for USDJPY)" }
+    pip_factor: { type: float, grid: "2", group: conventions, default: 0.0001, description: "Value of 1 pip (0.0001 for EURUSD, 0.01 for USDJPY)" }
+    price_decimals: { type: int, grid: "2", group: conventions, default: 5, description: "Quoted decimals (pip + 1 for pipettes)" }
+    fwd_pts_scale: { type: float, grid: "2", group: conventions, default: 10000.0, description: "Fwd points scale factor" }
+    big_figure_size: { type: int, grid: "2", group: conventions, default: 100, description: "Pips per big figure" }
+    standard_spot_offset: { type: int, grid: "2", group: conventions, default: 2, description: "T+N spot convention (USDCAD/USDTRY=1, most=2)" }
+    min_tenor: { grid: "2", group: conventions, default: "ON", description: "Shortest quoted tenor" }
+    max_tenor: { grid: "2", group: conventions, default: "30Y", description: "Longest quoted tenor" }
+    market_makers_count: { type: int, grid: "2", group: conventions, description: "Approx number of LPs (liquidity proxy)" }
+    avg_daily_volume_usd: { type: float, grid: "3", group: conventions, description: "BIS-reported ADV in USD-eq" }
+
+    # ── Calendars & Fixing ──
+    settlement_calendars:
+      type: list
+      grid: "12"
+      group: calendars
+      widget: tags
+      description: "Settlement calendars to intersect (typically base-ccy + quote-ccy + USD)"
+      ref: calendars.name
+    fixing_calendar_id: { grid: "4", group: calendars, ref: calendars.name, description: "Fixing calendar (for NDF tenor→fix→value)" }
+    default_fixing_source: { grid: "3", group: calendars, enum: $enums.ENUM_FIXING_SOURCE }
+    fallback_fixing_source: { grid: "3", group: calendars, enum: $enums.ENUM_FIXING_SOURCE }
+    fixing_publication_tz: { grid: "3", group: calendars, placeholder: "America/New_York" }
+    emta_template_ref: { grid: "4", group: calendars, description: "EMTA template code (e.g., BRL09, KRW10, INR01)" }
+    fixing_lag_days: { type: int, grid: "2", group: calendars, default: 0, description: "Fixing → settlement lag (T+N business days)" }
+
+    # ── Settlement / CLS ──
+    cls_eligible: { type: bool, grid: "2", group: settlement, default: false, description: "PvP settlement via CLS" }
+    cls_currency: { type: bool, grid: "2", group: settlement, default: false, description: "Is this a CLS settlement ccy (both sides)" }
+    cls_cutoff_utc: { grid: "3", group: settlement, default: "00:00", description: "CLS IPSF cutoff (UTC)" }
+    payment_method_base: { grid: "3", group: settlement, enum: $enums.ENUM_PAYMENT_METHOD }
+    payment_method_quote: { grid: "3", group: settlement, enum: $enums.ENUM_PAYMENT_METHOD }
+    ndf_settlement_ccy: { grid: "2", group: settlement, enum: $enums.ENUM_CCY, description: "NDF net-cash ccy (usually USD)" }
+    onshore_restrictions: { type: str, widget: textarea, grid: "12", group: settlement, description: "Regulatory notes (CBCI approval, onshore docs, etc.)" }
+
+    # ── Option Conventions ──
+    default_premium_conv: { grid: "3", group: option_conv, enum: $enums.ENUM_PREMIUM_CONV, description: "Market-standard premium convention" }
+    default_delta_conv: { grid: "3", group: option_conv, enum: $enums.ENUM_DELTA_CONV, description: "Market-standard delta convention" }
+    default_atm_type: { grid: "3", group: option_conv, enum: $enums.ENUM_ATM_TYPE, default: DNS }
+    default_cut_time: { grid: "3", group: option_conv, enum: $enums.ENUM_CUT_TIME, default: NY_1000 }
+    vol_quote_type: { grid: "3", group: option_conv, enum: $enums.ENUM_VOL_QUOTE_TYPE, default: LOGNORMAL }
+    smile_deltas: { type: list, grid: "6", group: option_conv, widget: tags, default: ["10D", "25D", "ATM"], description: "Quoted deltas on the smile (10D, 25D RR/BF, ATM)" }
+    default_premium_ccy: { grid: "2", group: option_conv, enum: $enums.ENUM_CCY, description: "Default premium ccy (usually quote ccy for G10)" }
+    option_delivery_offset: { type: int, grid: "2", group: option_conv, default: 2, description: "Expiry → delivery offset (spot days)" }
+
+    # ── Trading ──
+    trading_hours_utc: { grid: "6", group: trading, default: "Sun 22:00 – Fri 22:00", description: "Active trading window (24/5 for majors)" }
+    min_trade_size: { type: float, grid: "3", group: trading, description: "Minimum notional in base ccy" }
+    max_streaming_size: { type: float, grid: "3", group: trading, description: "Largest size shown on streaming price" }
+    standard_clip_size: { type: float, grid: "3", group: trading, description: "Typical RFQ clip size" }
+    block_threshold: { type: float, grid: "3", group: trading, description: "Dodd-Frank block threshold (if reportable)" }
+    last_look_ms: { type: int, grid: "2", group: trading, default: 0, description: "Default last-look window (ms, 0 = no last-look)" }
+    full_amount_available: { type: bool, grid: "2", group: trading, default: false, description: "No-last-look full-amount pricing available" }
+    venues: { type: list, grid: "8", group: trading, widget: tags, enum: $enums.ENUM_VENUE, description: "Venues this pair trades on" }
+
+    # ── System ──
+    iso_4217_base: { grid: "2", group: system, description: "ISO 4217 base numeric" }
+    iso_4217_quote: { grid: "2", group: system, description: "ISO 4217 quote numeric" }
+    fpml_pair_code: { grid: "3", group: system, description: "FpML currencyPair code" }
+    bbg_ticker: { grid: "3", group: system, description: "Bloomberg ticker (e.g., EURUSD Curncy)" }
+    reuters_ric: { grid: "3", group: system, description: "Refinitiv RIC (e.g., EUR=)" }
+    effective_from: { grid: "3", group: system }
+    effective_to: { grid: "3", group: system }

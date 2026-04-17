@@ -1,0 +1,98 @@
+# =============================================================================
+# FLOW: on_axe_response
+# =============================================================================
+# Trigger: AXE event state change (LIVE, UPDATED, WITHDRAWN, FILLED) OR
+#          an RFQ/ORDER arrives referencing an axe_id
+# Action: Track axe-initiated inquiries, link back, update axe fill progress,
+#         publish WITHDRAWN if inventory consumed.
+# Primitive: CORRELATION (1:N) — one axe → many triggered RFQs
+# Scenarios: AXE_TO_RFQ, AXE_WITHDRAW
+# BBG/TW parity: MSG1/MSG2 axes on BBG, Tradeweb Axes board, MarketAxess IOI.
+# =============================================================================
+
+flow: on_axe_response
+mode: inline
+on_error: dlq
+category: pre_trade
+description: Track axe → RFQ/ORDER triggers, update axe fill, publish lifecycle
+
+source:
+  type: repo
+  repo: events
+  filter: >-
+    event_type == 'AXE'
+    OR (event_type IN ('RFQ', 'ORDER') AND payload.triggered_by_axe_id != null)
+
+steps:
+  - name: classify_event
+    transform:
+      is_axe: "$xu.eq($.event_type, 'AXE')"
+      is_response: "$xu.in($.event_type, ['RFQ', 'ORDER'])"
+      axe_id: "$xu.if($.is_axe, $.event_id, $.payload.triggered_by_axe_id)"
+
+  - name: load_axe
+    description: Load axe master and any existing triggered responses
+    transform:
+      axe: "$xu.load_event($.axe_id)"
+      axe_size: "$.axe.payload.size"
+      axe_remaining: "$.axe.payload.remaining_size"
+      existing_responses: "$xu.find_events({ links: { event_id: $.axe_id, rel: 'TRIGGERED_BY' } })"
+      response_count: "$xu.len($.existing_responses)"
+
+  - name: link_response
+    filter: "$.is_response == true"
+    description: Link the RFQ/ORDER back to the axe
+    transform:
+      response_update:
+        links:
+          - event_id: "$.axe_id"
+            rel: TRIGGERED_BY
+            role: CHILD
+      axe_update:
+        payload:
+          triggered_count: "$xu.add($.response_count, 1)"
+
+  - name: check_axe_fill
+    filter: "$.is_response == true AND $.event_type == 'ORDER'"
+    description: Update axe remaining size if inquiry converts to order
+    transform:
+      order_size: "$.payload.notional"
+      new_remaining: "$xu.subtract($.axe_remaining, $.order_size)"
+      axe_filled: "$xu.lte($.new_remaining, 0)"
+      new_axe_status: "$xu.if($.axe_filled, 'FILLED', 'UPDATED')"
+      axe_lifecycle_update:
+        payload:
+          remaining_size: "$.new_remaining"
+          filled_size: "$xu.subtract($.axe_size, $.new_remaining)"
+          last_hit_at: "$now"
+          last_hit_event_id: "$.event_id"
+        status: "$.new_axe_status"
+
+  - name: apply_axe_expiry
+    filter: "$.is_axe == true AND $.status == 'WITHDRAWN'"
+    description: When axe is withdrawn, cancel any pending linked RFQs
+    transform:
+      pending_rfqs: "$xu.find_events({ links: { event_id: $.axe_id, rel: 'TRIGGERED_BY' }, event_type: 'RFQ', status: ['PENDING', 'OPEN', 'QUOTED'] })"
+      withdrawal_notices: "$xu.map($.pending_rfqs, { event_type: 'RFQ', event_id: $.id, status: 'EXPIRED', reason: 'AXE_WITHDRAWN' })"
+
+sinks:
+  - type: repo
+    repo: events
+    mode: update
+    filter: "$.response_update != null"
+    map: "$.response_update"
+  - type: repo
+    repo: events
+    mode: update
+    filter: "$.axe_lifecycle_update != null"
+    map: "$.axe_lifecycle_update"
+    target_event_id: "$.axe_id"
+  - type: event
+    channel: xds:xftws:axe_response
+  - type: websocket
+    channel: xds:xftws:axe_response
+    event_type: axe_response
+  - type: websocket
+    channel: "xds:xftws:axes:${axe.payload.pair_id}"
+    event_type: axe_update
+    filter: "$.is_axe == true"

@@ -1,0 +1,57 @@
+# =============================================================================
+# FX_CONVENTIONS — Shared conventions block for FX events
+# =============================================================================
+# Embedded in FX payloads as conventions{}. Pulls defaults from fx_pair at
+# capture time; overrides on this block win for this one trade (e.g., a
+# cross-desk bilateral non-standard cut).
+# =============================================================================
+blueprint: partial
+description: "FX conventions — pair ref + captured overrides (pip, cut, premium/delta conv, calendars)"
+
+fields:
+  conventions:
+    type: dict
+    grid: "12"
+    group: conventions
+    description: "FX conventions captured at trade time (golden = fx_pair defaults)"
+    items:
+      # ── Pair Reference ──
+      pair_id:              { type: str, grid: "3", ref: fx_pairs.symbol, description: "fx_pair master row" }
+      symbol:               { type: str, grid: "2", description: "Denormalized symbol (EURUSD)" }
+      base_ccy:             { type: str, grid: "2", enum: $enums.ENUM_CCY }
+      quote_ccy:            { type: str, grid: "2", enum: $enums.ENUM_CCY }
+      deliverability:       { type: str, grid: "3", enum: $enums.ENUM_FX_DELIVERABILITY }
+
+      # ── Pip / Price ──
+      pip_decimals:         { type: int, grid: "2", description: "Pip position at trade time" }
+      pip_factor:           { type: float, grid: "2" }
+      price_decimals:       { type: int, grid: "2" }
+      fwd_pts_scale:        { type: float, grid: "2", description: "Forward-points scale" }
+
+      # ── Calendars ──
+      settlement_calendars: { type: list, grid: "6", widget: tags, description: "Calendars used for this trade's settlement intersect" }
+      fixing_calendar_id:   { type: str, grid: "3", description: "Calendar used for NDF/fixing resolution" }
+      settlement_days:      { type: int, grid: "2", description: "Spot offset applied" }
+
+      # ── Fixing (NDF & FX-option) ──
+      fixing_source:        { type: str, grid: "3", enum: $enums.ENUM_FIXING_SOURCE }
+      fallback_fixing:      { type: str, grid: "3", enum: $enums.ENUM_FIXING_SOURCE }
+      emta_template_ref:    { type: str, grid: "3", description: "EMTA template if NDF" }
+      fixing_date:          { type: date, grid: "3" }
+      fixing_status:        { type: str, grid: "2", enum: $enums.ENUM_FIXING_STATUS }
+
+      # ── Option Conventions ──
+      premium_conv:         { type: str, grid: "3", enum: $enums.ENUM_PREMIUM_CONV, description: "Premium quote convention" }
+      delta_conv:           { type: str, grid: "3", enum: $enums.ENUM_DELTA_CONV, description: "Delta convention" }
+      atm_type:             { type: str, grid: "3", enum: $enums.ENUM_ATM_TYPE, description: "ATM definition" }
+      cut_time:             { type: str, grid: "3", enum: $enums.ENUM_CUT_TIME, description: "Expiry cut" }
+      vol_quote_type:       { type: str, grid: "3", enum: $enums.ENUM_VOL_QUOTE_TYPE }
+      pricing_model:        { type: str, grid: "3", enum: $enums.ENUM_OPTION_PRICING_MODEL }
+
+      # ── CLS ──
+      cls_eligible:         { type: bool, grid: "2", description: "This trade settles via CLS" }
+      cls_settlement_member: { type: str, grid: "3", description: "Settlement member TPID" }
+
+      # ── Quote Firmness (applies to pricing events) ──
+      quote_firmness:       { type: str, grid: "3", enum: $enums.ENUM_QUOTE_FIRMNESS }
+      last_look_ms:         { type: int, grid: "2", description: "Last-look window used" }

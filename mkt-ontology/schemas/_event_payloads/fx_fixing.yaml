@@ -1,0 +1,57 @@
+# =============================================================================
+# FX_FIXING Payload — FX / NDF fixing observation
+# =============================================================================
+# event_type: FX_FIXING
+# Flow: Fixing source publishes the rate → we materialize a FX_FIXING event,
+# which triggers NDF settlement_instr generation, option exercise-at-cut
+# decisions, and barrier monitoring pipelines.
+# One row per (pair, source, fixing_date, tenor). Contested fixings get a
+# sibling FX_FIXING_CONTEST event.
+# =============================================================================
+blueprint: partial
+description: "FX / NDF fixing event — source, rate, status, downstream triggers"
+
+fields:
+  # ── Identity ──
+  pair_id:            { type: str, required: true, ref: fx_pairs.symbol, description: "Fixed pair" }
+  symbol:             { type: str, description: "Denormalized symbol (EURUSD)" }
+  fixing_source:      { type: str, required: true, enum: $enums.ENUM_FIXING_SOURCE }
+  fixing_date:        { type: date, required: true, description: "Fixing business date" }
+  fixing_time_local:  { type: str, description: "Fixing publication time (HH:MM local tz)" }
+  fixing_tz:          { type: str, description: "Fixing source timezone (IANA)" }
+  tenor:              { type: str, description: "Tenor (SPOT, 1M, 3M, ON, TN, etc.)" }
+  emta_template_ref:  { type: str, description: "EMTA template applied (NDF only)" }
+
+  # ── Rate ──
+  rate:               { type: float, required: true, description: "Observed fixing rate" }
+  rate_bid:           { type: float, description: "Bid (if source publishes two-way)" }
+  rate_ask:           { type: float, description: "Ask" }
+  rate_mid:           { type: float, description: "Mid" }
+  status:             { type: str, required: true, enum: $enums.ENUM_FIXING_STATUS, default: PENDING }
+  estimated:          { type: bool, default: false, description: "Estimated rate (pre-publication)" }
+
+  # ── Fallback chain ──
+  primary_source:     { type: str, enum: $enums.ENUM_FIXING_SOURCE }
+  fallback_source:    { type: str, enum: $enums.ENUM_FIXING_SOURCE }
+  used_fallback:      { type: bool, default: false, description: "Primary unavailable → fallback used" }
+  fallback_reason:    { type: str, enum: [SOURCE_DOWN, DISRUPTION_EVENT, HOLIDAY_OVERLAP, CONTESTED, OTHER] }
+
+  # ── Disruption / disputed ──
+  is_disruption_event: { type: bool, default: false, description: "Official market-disruption declared (EMTA)" }
+  disruption_type:    { type: str, enum: [PRICE_SOURCE, INCONVERTIBILITY, NON_TRANSFERABILITY, MATERIAL_CHANGE, GENERAL_INCONVERTIBILITY] }
+  disruption_fallback_days: { type: int, description: "Max deferral before calculation agent determines" }
+  calculation_agent:  { type: str, description: "Calc agent entity_id (disruption fallback)" }
+  contested:          { type: bool, default: false, description: "Fixing is under dispute" }
+  contest_resolution: { type: str, description: "Resolution narrative" }
+
+  # ── Downstream triggers (populated after propagation) ──
+  triggered_settlements: { type: list, description: "event_ids of SETTLEMENT_INSTR created" }
+  triggered_exercises:   { type: list, description: "event_ids of EXERCISE_NOTICE triggered" }
+  triggered_barriers:    { type: list, description: "event_ids of barrier breach events" }
+  impacted_trade_count:  { type: int, description: "Number of trades valued off this fixing" }
+
+  # ── Raw / external ──
+  vendor_fixing_id:   { type: str, description: "Vendor's fixing ID for reconciliation" }
+  published_at:       { type: str, widget: datetime, description: "Actual publication timestamp" }
+  last_updated_at:    { type: str, widget: datetime, description: "Last revision timestamp" }
+  revision:           { type: int, default: 1, description: "Fixing revision number" }

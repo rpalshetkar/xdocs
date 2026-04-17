@@ -1,0 +1,161 @@
+# =============================================================================
+# FLOW: on_block_allocation
+# =============================================================================
+# Trigger: TRADE event marked as block (payload.is_block=true) OR explicit
+#          allocation request referencing a parent block trade.
+# Action: Fan out child ALLOC_SPLIT events per sub-account with weighted
+#         average price, track running totals, emit alert if residual remains
+#         past allocation SLA.
+# Primitive: ALLOCATION (1:N) — block TRADE → N child ALLOC_SPLIT events
+# Scenarios: BLOCK_ALLOC, AVERAGE_PRICE_ALLOC
+# BBG/TW parity: Bloomberg AIM block allocation, Tradeweb ATS average-price,
+# Omgeo CTM allocation matching.
+# Companion flow: on_allocation_requested.yaml handles child → parent sum check.
+# =============================================================================
+
+flow: on_block_allocation
+mode: inline
+on_error: dlq
+category: post_trade
+description: Block trade → N sub-account allocations with avg price and residual tracking
+
+source:
+  type: repo
+  repo: events
+  filter: >-
+    event_type == 'TRADE'
+    AND payload.is_block == true
+    AND status IN ('CONFIRMED', 'CLEARED')
+    AND payload.allocation_status != 'COMPLETE'
+
+steps:
+  - name: load_block
+    transform:
+      block_id: "$.event_id"
+      block_notional: "$.payload.notional"
+      block_price: "$.payload.rate"
+      block_fills: "$.payload.fills"
+      has_fills: "$xu.gt($xu.len($.block_fills), 0)"
+      wavg_price: >-
+        $xu.if($.has_fills,
+               $xu.sum($.block_fills, f => f.price * f.quantity) /
+               $xu.sum($.block_fills, f => f.quantity),
+               $.block_price)
+      allocation_instructions: "$.payload.allocation_instructions"
+      has_instructions: "$xu.gt($xu.len($.allocation_instructions), 0)"
+
+  - name: validate_instructions
+    filter: "$.has_instructions == true"
+    description: Sum instructions must equal block notional (within tolerance)
+    transform:
+      instructed_total: "$xu.sum($.allocation_instructions, i => i.notional)"
+      residual: "$xu.subtract($.block_notional, $.instructed_total)"
+      is_balanced: "$xu.lt($xu.abs($.residual), 0.01)"
+      pct_allocated: "$xu.divide($.instructed_total, $.block_notional)"
+
+  - name: generate_allocation_splits
+    filter: "$.is_balanced == true"
+    description: Create one ALLOC_SPLIT per sub-account instruction
+    transform:
+      splits:
+        from: "$.allocation_instructions"
+        map:
+          event_type: ALLOC_SPLIT
+          source: MATCHING_ENG
+          status: PENDING
+          product_type: "$.block.product_type"
+          cpty_id: "$.block.cpty_id"
+          book_id: "$.book_id"
+          payload:
+            block_event_id: "$.block_id"
+            sub_account_id: "$.sub_account_id"
+            client_entity_id: "$.client_entity_id"
+            notional: "$.notional"
+            pct_of_block: "$xu.divide($.notional, $.block.block_notional)"
+            price: "$.block.wavg_price"
+            rate: "$.block.wavg_price"
+            all_in_rate: "$.block.payload.all_in_rate"
+            ccy: "$.block.payload.ccy"
+            ccy_pair: "$.block.payload.ccy_pair"
+            security_id: "$.block.payload.security_id"
+            trade_date: "$.block.payload.trade_date"
+            value_date: "$.block.payload.value_date"
+            allocation_method: "$.block.payload.allocation_method"
+            ssi_id: "$.ssi_id"
+          links:
+            - event_id: "$.block_id"
+              rel: CHILD_OF
+              role: CHILD
+
+  - name: flag_imbalance
+    filter: "$.has_instructions == true AND $.is_balanced == false"
+    description: Instructions don't sum — emit alert, do not book
+    transform:
+      imbalance_alert:
+        block_event_id: "$.block_id"
+        block_notional: "$.block_notional"
+        instructed_total: "$.instructed_total"
+        residual: "$.residual"
+        severity: "$xu.if($xu.abs($.residual) > 10000, 'CRITICAL', 'WARN')"
+
+  - name: update_block_status
+    filter: "$.is_balanced == true"
+    transform:
+      block_update:
+        target_event_id: "$.block_id"
+        payload:
+          allocation_status: COMPLETE
+          allocated_at: "$now"
+          wavg_price: "$.wavg_price"
+          child_split_count: "$xu.len($.splits)"
+        correlation:
+          match_type: ALLOCATION
+          cardinality: ONE_TO_MANY
+          match_status: MATCHED
+          matched_at: "$now"
+
+  - name: send_to_cpty_matching
+    filter: "$.is_balanced == true"
+    description: Generate confirmation messages for each sub-account
+    transform:
+      affirm_messages:
+        from: "$.splits"
+        map:
+          event_type: AFFIRM_MSG
+          source: INTERNAL
+          status: PENDING
+          payload:
+            trade_event_id: "$.event_id"
+            sub_account_id: "$.payload.sub_account_id"
+            notional: "$.payload.notional"
+            price: "$.payload.price"
+            via_ctm: true
+          links:
+            - event_id: "$.event_id"
+              rel: CORRELATES_WITH
+              role: CHILD
+
+sinks:
+  - type: repo
+    repo: events
+    mode: save_many
+    filter: "$.splits != null"
+    map: "$.splits"
+  - type: repo
+    repo: events
+    mode: save_many
+    filter: "$.affirm_messages != null"
+    map: "$.affirm_messages"
+  - type: repo
+    repo: events
+    mode: update
+    filter: "$.block_update != null"
+    map: "$.block_update"
+  - type: event
+    channel: xds:xftws:block_alloc
+  - type: websocket
+    channel: xds:xftws:block_alloc
+    event_type: block_allocation
+  - type: event
+    channel: xds:xftws:alloc_imbalance
+    filter: "$.imbalance_alert != null"

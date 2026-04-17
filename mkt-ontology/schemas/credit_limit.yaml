@@ -1,0 +1,138 @@
+# =============================================================================
+# CREDIT_LIMIT — Credit / CSA / margin agreement per counterparty
+# =============================================================================
+# One row per limit scope (notional, PV, PFE, tenor, product). Utilization is
+# refreshed by the risk engine. CSA block captures collateral-agreement terms
+# (ISDA IA / threshold / MTA / eligible collateral). Breaches flow into
+# workflows via breach_action.
+# =============================================================================
+blueprint: schema
+kind: CreditLimit
+qualifier: "ftp-clm-"
+xid: limit_id|name
+xns: [id, xid]
+description: "Credit limits, CSA terms, margin agreements, and utilization"
+icon: shield
+
+sections:
+  - name: identity
+    label: "Limit"
+    icon: shield
+  - name: scope
+    label: "Scope"
+    icon: filter
+  - name: amounts
+    label: "Amounts"
+    icon: dollar-sign
+  - name: utilization
+    label: "Utilization"
+    icon: activity
+  - name: csa
+    label: "CSA / Collateral"
+    icon: lock
+  - name: breach
+    label: "Breach Handling"
+    icon: alert-triangle
+  - name: system
+    label: "System"
+    icon: settings
+
+views:
+  - type: table
+    label: "Limit Grid"
+    icon: table
+    default: true
+  - type: card
+    label: "Limit Cards"
+    icon: layout-grid
+    title: name
+    subtitle: party_id
+    badge: status
+  - type: bar
+    label: "By Type"
+    icon: bar-chart
+    x: limit_type
+    y: $count
+
+model:
+  fields:
+    # ── Identity ──
+    limit_id: { key: true, rank: hero, grid: "3", group: identity, col: "2<", placeholder: "FTP-CLM-001" }
+    name: { fuzzy: true, grid: "5", rank: hero, group: identity, card: title, col: "1<", placeholder: "ACME Corp — FX 1Y Gross" }
+    party_id: { grid: "3", rank: primary, group: identity, ref: entities.name, description: "Counterparty this limit applies to" }
+    counterparty_group_id: { grid: "3", group: identity, ref: entities.name, description: "Group/parent for consolidated limits" }
+    limit_type: { facet: true, grid: "3", rank: primary, group: identity, enum: $enums.ENUM_LIMIT_TYPE }
+    status: { facet: true, grid: "2", group: identity, card: badge, enum: [ACTIVE, SUSPENDED, EXPIRED, UNDER_REVIEW], default: ACTIVE }
+
+    # ── Scope ──
+    product_scope: { type: list, grid: "6", group: scope, widget: tags, enum: $enums.ENUM_PRODUCT_TYPE, description: "Products this limit covers (empty = all)" }
+    ccy: { grid: "3", group: scope, enum: $enums.ENUM_CCY, description: "Limit currency (null = aggregate)" }
+    ccy_pair_scope: { type: list, grid: "6", group: scope, widget: tags, description: "FX pairs (e.g., EURUSD) if limit is pair-specific" }
+    tenor_bucket: { grid: "3", group: scope, enum: $enums.ENUM_TENOR_BUCKET, description: "Tenor bucket if per-tenor limit" }
+    book_scope: { type: list, grid: "6", group: scope, widget: tags, description: "Books covered (empty = all)" }
+    desk_scope: { type: list, grid: "6", group: scope, widget: tags, description: "Desks covered" }
+
+    # ── Amounts ──
+    gross_limit: { type: float, grid: "3", rank: primary, group: amounts, description: "Gross notional cap" }
+    net_limit: { type: float, grid: "3", group: amounts, description: "Net exposure cap (after netting)" }
+    warning_pct: { type: float, grid: "2", group: amounts, default: 80.0, description: "Warn threshold (% of net_limit)" }
+    soft_cap: { type: float, grid: "3", group: amounts, description: "Soft cap — WARN but allow" }
+    hard_cap: { type: float, grid: "3", group: amounts, description: "Hard cap — BLOCK" }
+    settlement_limit_daily: { type: float, grid: "3", group: amounts, description: "Daily settlement (Herstatt) cap" }
+
+    # ── Utilization (refreshed by risk engine) ──
+    current_utilization: { type: float, grid: "3", group: utilization, description: "Current measured exposure" }
+    utilization_pct: { type: float, grid: "2", group: utilization, description: "Current / net_limit × 100" }
+    peak_utilization: { type: float, grid: "3", group: utilization, description: "Intra-day peak" }
+    peak_at: { grid: "3", group: utilization, description: "Timestamp of peak" }
+    last_refreshed_at: { grid: "3", group: utilization, description: "Last risk-engine refresh" }
+    snap: { grid: "2", group: utilization, enum: $enums.ENUM_SNAP, default: LIVE }
+
+    # ── CSA / Collateral ──
+    csa_id: { grid: "3", group: csa, description: "CSA agreement reference" }
+    csa_type: { facet: true, grid: "3", group: csa, enum: $enums.ENUM_CSA_TYPE, default: NONE }
+    csa_ccy: { grid: "2", group: csa, enum: $enums.ENUM_CCY, description: "Base/eligible currency for CSA" }
+    independent_amount: { type: float, grid: "3", group: csa, description: "IA (upfront initial margin)" }
+    ia_segregated: { type: bool, grid: "2", group: csa, default: false, description: "IA held in segregated account (UMR)" }
+    threshold_self: { type: float, grid: "3", group: csa, description: "Our threshold (collateral called above this)" }
+    threshold_cpty: { type: float, grid: "3", group: csa, description: "Counterparty's threshold" }
+    mta: { type: float, grid: "3", group: csa, description: "Minimum Transfer Amount" }
+    rounding: { type: float, grid: "2", group: csa, description: "Round to nearest (e.g., 10000)" }
+    call_frequency: { grid: "3", group: csa, enum: [DAILY, WEEKLY, MONTHLY, ON_DEMAND], default: DAILY }
+    eligible_collateral:
+      type: list
+      grid: "12"
+      group: csa
+      collapsed: true
+      description: "Eligible collateral types, haircuts, concentration limits"
+      items:
+        type: dict
+        items:
+          collat_type: { grid: "3", enum: [CASH, GOVT_BOND, CORP_BOND, EQUITY, GOLD, LETTER_OF_CREDIT] }
+          ccy: { grid: "2", enum: $enums.ENUM_CCY }
+          rating_min: { grid: "2", description: "Min credit rating (e.g., AA-)" }
+          haircut_pct: { type: float, grid: "2", description: "Valuation haircut (%)" }
+          concentration_cap_pct: { type: float, grid: "3", description: "Max % of total collateral" }
+
+    # ── Breach Handling ──
+    breach_action: { facet: true, grid: "3", group: breach, enum: $enums.ENUM_BREACH_ACTION, default: WARN }
+    breach_approver: { grid: "3", group: breach, description: "Role/user required to approve breach override" }
+    escalation_chain: { type: list, grid: "6", group: breach, widget: tags, description: "Users/roles notified on breach" }
+    auto_hedge_book: { grid: "3", group: breach, description: "Book to auto-hedge into if breach_action=AUTO_HEDGE" }
+    current_breach: { type: bool, grid: "2", group: breach, default: false, description: "Currently in breach" }
+    breach_count_ytd: { type: int, grid: "2", group: breach, default: 0 }
+
+    # ── System ──
+    effective_from: { grid: "3", group: system, description: "ISO 8601" }
+    effective_to: { grid: "3", group: system, description: "ISO 8601" }
+    review_frequency: { grid: "3", group: system, enum: [QUARTERLY, SEMI_ANNUAL, ANNUAL, AD_HOC], default: ANNUAL }
+    next_review_date: { grid: "3", group: system }
+    approved_by: { grid: "3", group: system, description: "Credit officer" }
+    legal_docs: { type: list, grid: "9", group: system, widget: tags, description: "Legal doc refs (ISDA, CSA, guarantee)" }
+    encrypted_fields:
+      type: list
+      grid: "6"
+      group: system
+      widget: tags
+      default: [gross_limit, net_limit, current_utilization, independent_amount]
+      description: "Fields encrypted at rest (uses xftws_trade_economics_dek)"
