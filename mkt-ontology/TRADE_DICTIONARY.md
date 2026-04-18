@@ -7,8 +7,8 @@
 
 ## Design rules
 
-1. **Txn is non-economic.** Identity, parties, xrefs, regulatory, legal, confirmation. No rates. No notionals.
-2. **Instrument is market-conventional.** Product names dealers use — `BOND`, `TRS`, `IRS`, `CCS`, `FX_SPOT`, `FX_SWAP`, `FX_NDF`. Each instrument carries its own clearing/reporting/fee block and owns its legs.
+1. **Txn is non-economic.** Identity, parties, xrefs, legal, confirmation. No rates. No notionals.
+2. **Instrument is market-conventional.** Product names dealers use — `BOND`, `TRS`, `IRS`, `CCS`, `FX_SPOT`, `FX_SWAP`, `FX_NDF`. Each instrument carries its own clearing/fee block and owns its legs.
 3. **Leg is denormalized universal.** One schema, one field list, sparsely populated. The `leg_type` plus sparsity tell you what product slice this leg represents.
 4. **Masters are normalized.** Static instrument data (bond coupon/maturity/issuer, FX-pair conventions, FpML templates) lives in reference datasets. Per-trade recap only carries trade-specific deltas + a FK to the master.
 5. **Links make the package.** `instrument.links[]` encodes cross-instrument relationships (`UNDERLYING_OF`, `HEDGES`, `FUNDED_BY`, `SETTLES`, `FUNDS`) — this is how a 7-instrument package stays coherent.
@@ -35,27 +35,18 @@ parties[]             role-based refs to parties dataset
   book_id             (optional) FK → books.name
 
 xrefs[]               cross-system txn identifiers
-  id_type             UTI | USI | UPI | PACKAGE_ID | VENUE_REF | INTERNAL
+  id_type             UTI | PACKAGE_ID | VENUE_REF | INTERNAL
   value
   source
 
-regulatory{}
-  is_package_trade
-  package_id
-  jurisdictions[]     CFTC | EMIR | MAS | FSC_KR | SFC_HK | ASIC
-  reporting_party_role
-  intended_reporting_venue
+is_package           bool — true when instruments[] length > 1
 
 legal{}
-  master_agreement_ref    ISDA / GMRA / GMSLA / MSFTA
-  csa_ref
-  governing_law           NY_LAW | ENGLISH_LAW | JAPANESE_LAW | SINGAPORE_LAW
+  master_agreement_ref    ISDA / master netting agreement
 
 confirmation{}
-  method                  MARKITWIRE | DTCC_DERIV | PAPER | ELECTRONIC
+  method                  MARKITWIRE | PAPER | ELECTRONIC
   status                  PENDING | AFFIRMED | CONFIRMED | DISPUTED
-  electronic_platform
-  confirmed_at
 
 instruments[]           ← the package
 ```
@@ -82,20 +73,7 @@ clearing{}
   clearing_member
   client_account
   clearing_ref
-  um_category           HOUSE | CLIENT | AFFILIATE
   clearing_date
-  margin_segregation    OSA | ISA | OMNIBUS
-
-reporting{}
-  upi                   Unique Product Identifier (ISO 4914)
-  asset_class           RATES | CREDIT | FX | EQUITY | COMMODITY | OTHER
-  cftc_product_code
-  mifir_class
-  is_reportable
-
-legal{}
-  master_agreement_ref  (overrides txn-level if different per product)
-  csa_ref
 
 fee{}                   optional fee attached to this instrument
   type                  COMMISSION | BROKERAGE | CLEARING | UPFRONT |
@@ -208,10 +186,9 @@ economics must be in KRW fixed.
 **Why a single packaged trade, not seven separate ones**:
 
 - Single ISDA confirm, single UTI, single MTM line in the client's risk system.
-- One CSA collateral bucket — cross-product netting under one master agreement.
+- One netting bucket across all seven instruments.
 - Dealer's structuring team prices the package holistically; client doesn't leg
   into slippage.
-- EMIR/CFTC treats it as one package trade with a coherent UPI chain.
 - Unwind is atomic — client can't end up with orphan hedges.
 
 ### Package composition
@@ -253,25 +230,16 @@ parties:
 
 xrefs:
   - { id_type: UTI,         value: 1000ABC.20260417.KRW-APPLE-TRS.001, source: INTERNAL }
-  - { id_type: PACKAGE_ID,  value: PKG-KRW-APPLE-2026-04-001,          source: INTERNAL }
   - { id_type: VENUE_REF,   value: TW-MLX-7729555,                     source: TRADEWEB }
 
-regulatory:
-  is_package_trade: true
-  package_id: PKG-KRW-APPLE-2026-04-001
-  jurisdictions: [CFTC, MAS, FSC_KR]
-  reporting_party_role: US
-  intended_reporting_venue: DTCC_GTR
+is_package: true
 
 legal:
   master_agreement_ref: ISDA-2002-BANK-KRLIFE-2024-03-11
-  csa_ref:               CSA-2016-VM-BANK-KRLIFE
-  governing_law:         ENGLISH_LAW
 
 confirmation:
   method: MARKITWIRE
   status: PENDING
-  electronic_platform: MARKITWIRE
 
 instruments:
 
@@ -287,9 +255,6 @@ instruments:
     observed_price: 99.85
     accrued_at_start: 0
   clearing: { is_cleared: false }
-  reporting:
-    upi: QZWTXB5B3J16
-    asset_class: CREDIT
   legs:
     - leg_seq: 1
       leg_type: BOND_LEG
@@ -321,11 +286,6 @@ instruments:
     compounding: COMPOUNDING
     lookback_days: 2
   clearing: { is_cleared: false }
-  reporting:
-    upi: QZ8TRS5Y.USD.IBOND
-    asset_class: CREDIT
-  legal:
-    master_agreement_ref: ISDA-2002-BANK-KRLIFE-2024-03-11
   fee:
     type: STRUCTURING
     amount: 12_500
@@ -380,10 +340,6 @@ instruments:
     clearing_member: ftp-bank-abc
     client_account: CM-KRLIFE-01
     clearing_ref: LCH.CCS.USDKRW.7729555
-    um_category: CLIENT
-  reporting:
-    upi: QZ8CCS5Y.USDKRW.FLT_FLT
-    asset_class: RATES
   links:
     - { rel: HEDGES, target_instrument_seq: 2 }
   legs:
@@ -434,10 +390,6 @@ instruments:
     clearing_member: ftp-bank-abc
     client_account: KSPC-KRLIFE-01
     clearing_ref: KSPC.IRS.KRW.8821447
-    um_category: CLIENT
-  reporting:
-    upi: QZ8IRS5Y.KRW.FIX_CD91
-    asset_class: RATES
   links:
     - { rel: HEDGES, target_instrument_seq: 3 }
   legs:
@@ -477,9 +429,6 @@ instruments:
     settlement_days: 2
     deliverability: NDF
   clearing: { is_cleared: false }
-  reporting:
-    upi: QZ8FX.USDKRW.SPOT
-    asset_class: FX
   links:
     - { rel: FUNDS, target_instrument_seq: 2 }
   legs:
@@ -509,9 +458,6 @@ instruments:
     fwd_pts_scale: 100
     deliverability: NDF
   clearing: { is_cleared: false }
-  reporting:
-    upi: QZ8FX.USDKRW.SWAP
-    asset_class: FX
   links:
     - { rel: HEDGES, target_instrument_seq: 2 }
   legs:
@@ -553,9 +499,6 @@ instruments:
     fallback_fixing: EMTA_LOCAL
     emta_template_ref: KRW10
   clearing: { is_cleared: false }
-  reporting:
-    upi: QZ8FX.USDKRW.NDF
-    asset_class: FX
   links:
     - { rel: SETTLES, target_instrument_seq: 2 }
   legs:
@@ -580,13 +523,12 @@ instruments:
 
 | Property                              | How                                                                                                       |
 | ------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| One UTI, one package                  | `regulatory.is_package_trade=true` + `package_id` threaded through xrefs.                                 |
+| One UTI, one package                  | `is_package: true` on txn header + single UTI across all instruments.                                     |
 | Partial clearing supported            | Each instrument carries its own `clearing{}`. CCS+IRS at LCH/KRX, bond/FX/TRS bilateral — all in one txn. |
 | No economics duplicated               | Bond terms live in master; TRS references via `underlying_ref: {instrument_seq: 1}`.                      |
 | One leg schema for all products       | Every leg has the same field list, populated sparsely per `leg_type`.                                     |
 | Instrument links traceable            | `links[]` encodes HEDGES / FUNDED_BY / UNDERLYING_OF / SETTLES / FUNDS — queryable graph.                 |
 | Fee is structural                     | `fee{}` on instrument. Also expressible as `leg_type: FEE` when a standalone fee instrument is needed.    |
-| Regulatory reportable per instrument  | Each instrument has its own `upi` + `asset_class` — DTCC-GTR / EMIR consume instrument by instrument.     |
 | Master + recap pattern normalizes ref | 1000 trades on the same bond ISIN = 1 master row + 1000 slim recaps. No static data duplication.          |
 
 ## See also

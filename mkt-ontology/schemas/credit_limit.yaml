@@ -1,17 +1,15 @@
 # =============================================================================
-# CREDIT_LIMIT — Credit / CSA / margin agreement per counterparty
+# CREDIT_LIMIT — Credit exposure limits per counterparty
 # =============================================================================
 # One row per limit scope (notional, PV, PFE, tenor, product). Utilization is
-# refreshed by the risk engine. CSA block captures collateral-agreement terms
-# (ISDA IA / threshold / MTA / eligible collateral). Breaches flow into
-# workflows via breach_action.
+# refreshed by the risk engine. Breaches flow into workflows via breach_action.
 # =============================================================================
 blueprint: schema
 kind: CreditLimit
 qualifier: "ftp-clm-"
 xid: limit_id|name
 xns: [id, xid]
-description: "Credit limits, CSA terms, margin agreements, and utilization"
+description: "Credit exposure limits with utilization and breach handling"
 icon: shield
 
 sections:
@@ -27,9 +25,6 @@ sections:
   - name: utilization
     label: "Utilization"
     icon: activity
-  - name: csa
-    label: "CSA / Collateral"
-    icon: lock
   - name: breach
     label: "Breach Handling"
     icon: alert-triangle
@@ -88,32 +83,6 @@ model:
     last_refreshed_at: { grid: "3", group: utilization, description: "Last risk-engine refresh" }
     snap: { grid: "2", group: utilization, enum: $enums.ENUM_SNAP, default: LIVE }
 
-    # ── CSA / Collateral ──
-    csa_id: { grid: "3", group: csa, description: "CSA agreement reference" }
-    csa_type: { facet: true, grid: "3", group: csa, enum: $enums.ENUM_CSA_TYPE, default: NONE }
-    csa_ccy: { grid: "2", group: csa, enum: $enums.ENUM_CCY, description: "Base/eligible currency for CSA" }
-    independent_amount: { type: float, grid: "3", group: csa, description: "IA (upfront initial margin)" }
-    ia_segregated: { type: bool, grid: "2", group: csa, default: false, description: "IA held in segregated account (UMR)" }
-    threshold_self: { type: float, grid: "3", group: csa, description: "Our threshold (collateral called above this)" }
-    threshold_cpty: { type: float, grid: "3", group: csa, description: "Counterparty's threshold" }
-    mta: { type: float, grid: "3", group: csa, description: "Minimum Transfer Amount" }
-    rounding: { type: float, grid: "2", group: csa, description: "Round to nearest (e.g., 10000)" }
-    call_frequency: { grid: "3", group: csa, enum: [DAILY, WEEKLY, MONTHLY, ON_DEMAND], default: DAILY }
-    eligible_collateral:
-      type: list
-      grid: "12"
-      group: csa
-      collapsed: true
-      description: "Eligible collateral types, haircuts, concentration limits"
-      items:
-        type: dict
-        items:
-          collat_type: { grid: "3", enum: [CASH, GOVT_BOND, CORP_BOND, EQUITY, GOLD, LETTER_OF_CREDIT] }
-          ccy: { grid: "2", enum: $enums.ENUM_CCY }
-          rating_min: { grid: "2", description: "Min credit rating (e.g., AA-)" }
-          haircut_pct: { type: float, grid: "2", description: "Valuation haircut (%)" }
-          concentration_cap_pct: { type: float, grid: "3", description: "Max % of total collateral" }
-
     # ── Breach Handling ──
     breach_action: { facet: true, grid: "3", group: breach, enum: $enums.ENUM_BREACH_ACTION, default: WARN }
     breach_approver: { grid: "3", group: breach, description: "Role/user required to approve breach override" }
@@ -134,5 +103,5 @@ model:
       grid: "6"
       group: system
       widget: tags
-      default: [gross_limit, net_limit, current_utilization, independent_amount]
+      default: [gross_limit, net_limit, current_utilization]
       description: "Fields encrypted at rest (uses xftws_trade_economics_dek)"

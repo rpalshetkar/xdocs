@@ -817,48 +817,15 @@ enums:
     - { value: AUTO_HEDGE, label: "Auto-hedge down", color: blue }
     - { value: CLOSE_OUT, label: "Close-out / Termination", color: red }
 
-  ENUM_CSA_TYPE:
-    - { value: ISDA_1994, label: "ISDA 1994 CSA" }
-    - { value: ISDA_2016, label: "ISDA 2016 VM CSA" }
-    - { value: ISDA_2018, label: "ISDA 2018 IM CSA" }
-    - { value: NY_LAW, label: "NY Law CSA" }
-    - { value: ENGLISH_LAW, label: "English Law CSA" }
-    - { value: JAPANESE_LAW, label: "Japanese Law CSA" }
-    - { value: NONE, label: "No CSA (unsecured)" }
-
   # ===========================================================================
-  # COUNTERPARTY ONBOARDING / CLASSIFICATION
+  # COMMERCIAL / CLASSIFICATION
   # ===========================================================================
-  ENUM_KYC_STATUS:
-    - { value: PENDING, color: amber, icon: clock }
-    - { value: UNDER_REVIEW, color: amber, icon: eye }
-    - { value: APPROVED, color: green, icon: check-circle }
-    - { value: EXPIRED, color: red, icon: clock }
-    - { value: REJECTED, color: red, icon: x-circle }
-    - { value: REMEDIATION, label: "Under Remediation", color: amber, icon: alert-triangle }
-
   ENUM_RELATIONSHIP_TIER:
     - { value: PLATINUM, color: violet, icon: star }
     - { value: GOLD, color: amber, icon: star }
     - { value: SILVER, color: grey, icon: star }
     - { value: BRONZE, color: brown, icon: star }
     - { value: PROSPECT, color: blue, icon: user-plus }
-
-  ENUM_W8_TYPE:
-    - { value: W8BEN, label: "W-8BEN (non-US individual)" }
-    - { value: W8BENE, label: "W-8BEN-E (non-US entity)" }
-    - { value: W8ECI, label: "W-8ECI (US effectively connected)" }
-    - { value: W8EXP, label: "W-8EXP (foreign gov/org)" }
-    - { value: W8IMY, label: "W-8IMY (intermediary)" }
-    - { value: W9, label: "W-9 (US person)" }
-    - { value: NONE, label: "Not Required" }
-
-  ENUM_MIFID_CLASSIFICATION:
-    - { value: ELIGIBLE_CPTY, label: "Eligible Counterparty" }
-    - { value: PROFESSIONAL, label: "Professional Client" }
-    - { value: PROFESSIONAL_ELECTIVE, label: "Professional (Elective)" }
-    - { value: RETAIL, label: "Retail Client" }
-    - { value: NA, label: "N/A (non-EU)" }
 
   # ===========================================================================
   # FX-SPECIFIC ENUMS (Slice 2)

@@ -19,9 +19,6 @@ sections:
   - name: classification
     label: "Classification"
     icon: tag
-  - name: onboarding
-    label: "KYC / Tax"
-    icon: file-check
   - name: coverage
     label: "Sales Coverage"
     icon: user-check
@@ -29,7 +26,7 @@ sections:
     label: "Authorized Panel"
     icon: users
   - name: credit
-    label: "Credit / CSA"
+    label: "Credit"
     icon: shield
   - name: prime_broker
     label: "Prime Broker / Give-Up"
@@ -80,24 +77,10 @@ model:
 
     # ── Classification ──
     entity_classification: { facet: true, grid: "3", group: classification, enum: $enums.ENUM_ENTITY_CLASSIFICATION, description: "Business type" }
-    mifid_classification: { facet: true, grid: "3", group: classification, enum: $enums.ENUM_MIFID_CLASSIFICATION, default: PROFESSIONAL }
     relationship_tier: { facet: true, grid: "2", group: classification, enum: $enums.ENUM_RELATIONSHIP_TIER, default: SILVER }
     onboarded_at: { grid: "3", group: classification, description: "Date onboarded (ISO 8601)" }
     credit_rating: { grid: "2", group: classification, description: "External rating (e.g., A+, BBB)" }
     internal_rating: { grid: "2", group: classification, description: "Internal credit rating" }
-
-    # ── Onboarding ──
-    kyc_status: { facet: true, grid: "2", group: onboarding, enum: $enums.ENUM_KYC_STATUS, default: PENDING }
-    kyc_approved_at: { grid: "3", group: onboarding, description: "ISO 8601" }
-    kyc_expiry: { grid: "3", group: onboarding, description: "KYC renewal due (ISO 8601)" }
-    kyc_risk_rating: { grid: "2", group: onboarding, enum: [LOW, MEDIUM, HIGH, PROHIBITED], default: LOW }
-    aml_approved: { type: bool, grid: "2", group: onboarding, default: false }
-    sanctions_screened_at: { grid: "3", group: onboarding, description: "Last OFAC/EU/UK sanctions screen" }
-    fatca_status: { grid: "3", group: onboarding, enum: [COMPLIANT, NONCOMPLIANT, EXEMPT, PENDING] }
-    w8_type: { grid: "2", group: onboarding, enum: $enums.ENUM_W8_TYPE, default: NONE }
-    w8_expiry: { grid: "3", group: onboarding, description: "W-8 form expiry" }
-    giin: { grid: "3", group: onboarding, description: "Global Intermediary ID Number (FATCA)" }
-    crs_status: { grid: "3", group: onboarding, enum: [REPORTABLE, NON_REPORTABLE, EXEMPT] }
 
     # ── Sales Coverage ──
     sales_coverage_id: { grid: "3", group: coverage, description: "Primary RM / salesperson" }
@@ -140,14 +123,10 @@ model:
           signing_limit: { type: float, grid: "3" }
           scope: { type: list, grid: "6", widget: tags, description: "Document types (ISDA, CSA, Confirm)" }
 
-    # ── Credit / CSA ──
+    # ── Credit ──
     default_credit_limit_id: { grid: "3", group: credit, ref: credit_limits.name, description: "Primary credit limit" }
     is_netting_eligible: { type: bool, grid: "2", group: credit, default: false, description: "Eligible for close-out netting" }
     netting_agreement_ref: { grid: "4", group: credit, description: "Master netting agreement ref" }
-    is_csa_agreement: { type: bool, grid: "2", group: credit, default: false, description: "Has CSA/collateral agreement" }
-    csa_id: { grid: "3", group: credit, description: "CSA agreement reference" }
-    umr_in_scope: { type: bool, grid: "2", group: credit, default: false, description: "Subject to Uncleared Margin Rules (UMR)" }
-    umr_phase: { grid: "2", group: credit, enum: [PHASE_1, PHASE_2, PHASE_3, PHASE_4, PHASE_5, PHASE_6, OUT_OF_SCOPE] }
     clearing_eligible: { type: bool, grid: "3", group: credit, default: false, description: "Eligible for CCP clearing" }
     preferred_ccps: { type: list, grid: "6", group: credit, widget: tags, description: "Preferred CCPs for clearing" }
 
@@ -182,9 +161,6 @@ model:
     jurisdiction: { grid: "3", group: legal, description: "Incorporation jurisdiction" }
     governing_law: { grid: "3", group: legal, enum: [NY_LAW, ENGLISH_LAW, JAPANESE_LAW, SINGAPORE_LAW, OTHER] }
     isda_master_ref: { grid: "3", group: legal, description: "ISDA Master Agreement ref" }
-    isda_master_date: { grid: "3", group: legal, description: "ISDA Master Agreement date" }
-    gmra_ref: { grid: "3", group: legal, description: "Global Master Repurchase Agreement ref" }
-    gmsla_ref: { grid: "3", group: legal, description: "Global Master Securities Lending Agreement ref" }
 
     # ── Hierarchy ──
     parent_party_id: { grid: "4", group: hierarchy, ref: entities.name, description: "Parent entity" }
